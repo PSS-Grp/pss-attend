@@ -1,0 +1,65 @@
+<!-- コメントはこのように書きます -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <!--  <title>打刻システム</title>  -->
+    <title>{{title}}：{{record_id}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+  </head>
+
+
+  <body>
+
+  <form action=/exit_view method="post">
+
+
+    <div id="frame">
+      <p class="text">　　お名前 ： {{ current_user.username }} </p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務日</p>
+      <p class="today">{{today}}　</p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">本葬</p>
+      <p class="option-title">会館名　{{place1}}　{{other1}}</p>
+      <p class="text">出勤時間　{{start1}}　退勤時間　{{end1}}</p>
+      <p class="option-title">――――――――――――――――――</p>
+              <p class="option">　　リーダー　　　{{leader1}}</p>
+              <p class="option">　　サブリーダー　{{subleader1}}</p>
+              <p class="option">　　研修　　　　　{{teach1}}</p>
+              <p class="option">　　待機　　　　　{{wait1}}</p>
+              <p class="option">　　指定日　　　　{{designated1}}</p>
+              <p class="option">　　特別　　　　　{{special1}}</p>
+              <p class="option">　　遠方地　　　　{{distant1}}</p>
+              <p class="option">　　高速道路　　　{{highway1}}　金額：{{express1}} 円</p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">通夜</p>
+      <p class="option-title">会館名　{{place2}}　{{other2}}</p>
+      <p class="text">出勤時間　{{start2}}　退勤時間　{{end2}}</p>
+      <p class="option-title">――――――――――――――――――</p>
+              <p class="option">　　リーダー　　　{{leader2}}</p>
+              <p class="option">　　サブリーダー　{{subleader2}}</p>
+              <p class="option">　　研修　　　　　{{teach2}}</p>
+              <p class="option">　　待機　　　　　{{wait2}}</p>
+              <p class="option">　　指定日　　　　{{designated2}}</p>
+              <p class="option">　　特別　　　　　{{special2}}</p>
+              <p class="option">　　遠方地　　　　{{distant2}}</p>
+              <p class="option">　　高速道路　　　{{highway2}}　金額：{{express2}} 円</p>
+    </div>
+
+      <p class="submit">
+        <input type="submit" value="更新画面" />
+      </p>
+
+  </form>
+  </body>
+
+
+</html>

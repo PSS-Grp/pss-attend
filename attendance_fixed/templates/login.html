@@ -1,0 +1,38 @@
+<!--  コメントはこのように書きます  -->
+
+<!DOCTYPE html>
+<html lang="ja">
+
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+    <title>{{title}}</title>
+  </head>
+
+  <body>
+    <form method="POST" action=/login>
+      <div id="frame">
+        <p class="frame-title">WEB勤怠システム</p>
+ 
+          <p>従業員番号</p>
+          <p class="input_text">
+            <input type="number" name="number" placeholder="Number" required>
+          </p>
+
+          <p>パスワード</p>
+          <p class="input_text">
+            <input type="password" name="password" placeholder="Password" required>
+          </p>
+
+          <p style="color: red;" >{{ error_message }}</p><br />
+
+          <p class="submit">
+            <input type="submit" name="login" id="login" value="ログイン" />
+          </p>
+        </div>
+    </form>
+  </body>
+
+</html>
+
+

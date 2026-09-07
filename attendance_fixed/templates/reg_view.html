@@ -1,0 +1,92 @@
+<!-- コメントはこのように書きます -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <!--  <title>打刻システム</title>  -->
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+  </head>
+
+
+  <body>
+
+  <form action=/reg_view method="post">
+
+    <div id="frame">
+      <p class="text">表示 お名前 ： {{ current_user.username }} {{record_id}}</p>
+    {% if error_message %}
+    <p style="color: red;">{{ error_message }}</p>
+    {% endif %}
+    </div>
+
+
+    <div id="frame">
+      <p class="frame-title">勤務日／会館名</p>
+        <table>
+          <tr>
+            <td>  
+            <p class="text">　{{today}}　</p>
+            </td>
+            <td>
+              <p>本葬　{{place1}}</p>
+              <p>通夜　{{place2}}</p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">本葬勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+              <p class="text">　出勤時間　{{start1}}</p>
+            </td>
+            <td>
+              <p class="text">　出勤時間　{{end1}}</p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+
+    <div id="frame">
+      <p class="frame-title">通夜勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+            <td>  
+              <p class="text">　出勤時間　{{start2}}</p>
+            </td>
+            <td>
+              <p class="text">　出勤時間　{{end2}}</p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <div id="frame">
+      <p class="text">オプション</p>
+      <p class="time">
+        <output type="checkbox" id="leader" name="option1" checked />
+        <label for="leader">リーダー</label><br />
+        <output type="checkbox" id="distant" name="option2" {{option2}} />
+        <label for="distant">遠方地（千円）</label><br />
+        <output type="checkbox" id="teach" name="teach" />
+        <label for="teach">教育</label><br />
+        <output type="checkbox" id="wait" name="wait" />
+        <label for="wait">待機</label><br />
+      </p>
+    </div>
+
+      <p class="submit">
+        <input type="submit" value="更新画面" />
+      </p>
+
+  </form>
+  </body>
+
+
+</html>

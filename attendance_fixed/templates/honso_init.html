@@ -1,0 +1,56 @@
+<!-- コメントはこのように書きます -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <!--  <title>打刻システム</title>  -->
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+  </head>
+
+
+  <body>
+
+  <form action=/honso_init method="post">
+
+
+    <div id="frame">
+      <p class="frame-title">本葬</p>
+      <p class="text">　名前 ： {{ current_user.username }} </p>
+    {% if error_message %}
+    <p style="color: red;">{{ error_message }}</p>
+    {% endif %}
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務日／会館名</p>
+      <p class="today">{{today}}　<span class="option">{{place1}}　{{other1}}</span></p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務時間</p>
+      <p class="text">出勤時間　{{start1}}　退勤時間　{{end1}}</p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">手当</p>
+              <p class="option">　リーダー　　　{{leader1}}</p>
+              <p class="option">　サブリーダー　{{subleader1}}</p>
+              <p class="option">　研修　　　　　{{teach1}}</p>
+              <p class="option">　待機　　　　　{{wait1}}</p>
+              <p class="option">　指定日　　　　{{designated1}}</p>
+              <p class="option">　遠方地　　　　{{distant1}}</p>
+              <p class="option">　特別　　　　　{{special1}}</p>
+              <p class="option">　高速道路　　　{{highway1}}　金額：{{express1}}円</p>
+    </div>
+
+      <p class="submit">
+        <input type="submit" value="閉じる" />
+      </p>
+
+  </form>
+  </body>
+
+
+</html>

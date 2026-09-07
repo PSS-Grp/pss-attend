@@ -1,0 +1,204 @@
+/* layout */
+
+body,p,frame,input {
+  margin: 0;
+}
+/* ------------------------------------------------------ */
+#frame {
+  width: 400px;
+  margin: 30px auto;
+  padding: 20px;
+  border: 1px solid #555;
+  -webkit-border-radius: 6px;
+  -moz-border-radius: 6px;
+  border-radius: 6px;
+  -webkit-box-shadow: 0px 1px 10px #488a9e;
+  -moz-box-shadow: 0px 1px 10px #488a9e;
+  box-shadow: 0px 1px 10px #488a9e;
+  border: solid #4eb4c2 1px;
+  background: #fafafa;
+}
+
+#frame p {
+  color: #077685;
+  font-weight: bold;
+  text-align: center;
+  font-size: 18px;
+}
+
+#frame .frame-title {
+  font-family: Arial;
+  font-size: 28px;
+  color: #4eb4c2;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #4eb4c2;
+  margin-bottom: 20px;
+  text-align: center;
+} 
+
+#frame .today {
+  color: #077600;
+  font-weight: bold;
+  text-align: center;
+  font-size: 21px;
+}
+
+#frame .option {
+  color: #077699;
+  font-weight: bold;
+  text-align: left;
+  font-size: 18px;
+}
+
+#frame .option-title {
+  margin-bottom: 8px;
+  font-size: 21px;
+}
+
+#frame .name {          /* class="name" */
+  font-size: 21px;
+}
+
+/* ------------------------------------------------------ */
+/* class="select" */
+select {
+  display: block;           /* ブロックレベル要素化する */
+  width: 150px;             /* ボックスの高さを指定する */
+  background: transparent;  /* 背景を透過指定する */
+  padding: 4px;
+}
+
+/* ------------------------------------------------------ */
+.input_text {
+  margin-bottom: 20px;
+}
+
+input[type="number"],
+input[type="password"] {
+  width: 200px;
+  padding: 5px;
+  font-size: 16px;
+  text-align: center;
+}
+
+input[type="text"] {
+  width: 240px;
+  padding: 5px;
+  font-size: 18px;
+  text-align: center;
+}
+
+input[type="time"] {
+  width: 180px;
+  padding: 5px;
+  font-size: 16px;
+  text-align: center;
+}
+/* ------------------------------------------------------ */
+
+
+/* ------------------------------------------------------ */
+.submit {
+  text-align: right;
+} 
+
+.submit input {
+  font-family: Arial;
+  color: #ffffff;
+  font-size: 16px;
+  padding-top: 10px;
+  padding-right: 20px;
+  padding-bottom: 10px;
+  padding-left: 20px;
+  text-decoration: none;
+  -webkit-border-radius: 10px;
+  -moz-border-radius: 10px;
+  border-radius: 10px;
+  -webkit-box-shadow: 0px 8px 6px #e3e3e3;
+  -moz-box-shadow: 0px 8px 6px #e3e3e3;
+  box-shadow: 0px 8px 6px #e3e3e3;
+  border: solid #f5fdff 4px;
+  background: -webkit-gradient(linear, 0 0, 0 100%, from(#61c7e0), to(#418da8));
+  background: -moz-linear-gradient(top, #61c7e0, #418da8);
+}
+.submit input:hover {
+  background: #37a4bf;
+}
+/* ------------------------------------------------------ */
+
+/* ------------------------------------------------------ */
+.select-submit {
+  text-align: center;
+} 
+
+.select-submit input {
+  font-family: Arial;
+  color: #ffffff;
+  font-size: 20px;
+  padding-top: 10px;
+  padding-right: 40px;
+  padding-bottom: 10px;
+  padding-left: 40px;
+  text-decoration: none;
+  -webkit-border-radius: 10px;
+  -moz-border-radius: 10px;
+  border-radius: 20px;
+  -webkit-box-shadow: 0px 8px 6px #e3e3e3;
+  -moz-box-shadow: 0px 8px 6px #e3e3e3;
+  box-shadow: 0px 8px 6px #e3e3e3;
+  border: solid #f5fdff 4px;
+  background: -webkit-gradient(linear, 0 0, 0 100%, from(#61c7e0), to(#418da8));
+  background: -moz-linear-gradient(top, #61c7e0, #418da8);
+}
+.select-submit input:hover {
+  background: #37a4bf;
+}
+/* ------------------------------------------------------ */
+
+
+/* font */
+
+/* skin */
+
+/*
+#frame {
+  -webkit-border-radius: 6px;
+  -moz-border-radius: 6px;
+  border-radius: 6px;
+  -webkit-box-shadow: 0px 1px 10px #488a9e;
+  -moz-box-shadow: 0px 1px 10px #488a9e;
+  box-shadow: 0px 1px 10px #488a9e;
+  border: solid #4eb4c2 1px;
+  background: #fafafa;
+}
+#frame .frame-title {
+  padding-bottom: 6px;
+  border-bottom: 2px solid #4eb4c2;
+  margin-bottom: 20px;
+}
+ */
+
+
+
+/* #id名によるセレクタ指定 HTMLソース内のid名をセレクタに指定する方法です。 */
+
+/*
+.time {
+  margin-bottom: 0px;
+}
+
+
+.date {
+  margin-bottom: 0px;
+}
+
+input[type="date"] {
+  width: 145px;
+  padding: 5px;
+  font-size: 16px;
+  text-align: center;
+}
+
+
+
+*/

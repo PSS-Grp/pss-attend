@@ -1,0 +1,143 @@
+<!-- コメントはこのように書きます -->
+
+<!-- [修正] 従来はレコードが無い場合のみ表示される「本葬/通夜どちらか選ぶ」
+     画面だったが、出勤・退勤の入力が済んだ後もこの画面(/judge)に
+     常に戻ってこられるように変更した。
+     本葬・通夜それぞれの状態(未出勤/出勤中/退勤済み)に応じて、
+     ボタンの見た目とリンク先を切り替える。
+     退勤済みのボタンは <a> ではなく <span> にしてリンク自体を無くし、
+     見た目もグレーアウトすることで、押せない状態を確実に表現している。 -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+    <style>
+      /* [追加] 本葬・通夜の状態表示とボタンのグレーアウト用スタイル */
+      .shift-block {
+        margin-bottom: 22px;
+      }
+      .shift-status {
+        color: #077699;
+        font-weight: bold;
+        text-align: center;
+        font-size: 15px;
+        margin-bottom: 10px;
+      }
+      .shift-btn {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        text-align: center;
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 20px;
+        padding: 12px 0;
+        text-decoration: none;
+        border-radius: 20px;
+        border: solid #f5fdff 4px;
+        -webkit-box-shadow: 0px 8px 6px #e3e3e3;
+        -moz-box-shadow: 0px 8px 6px #e3e3e3;
+        box-shadow: 0px 8px 6px #e3e3e3;
+        background: -webkit-gradient(linear, 0 0, 0 100%, from(#61c7e0), to(#418da8));
+        background: -moz-linear-gradient(top, #61c7e0, #418da8);
+      }
+      .shift-btn:hover {
+        background: #37a4bf;
+      }
+      /* [追加] 退勤済み＝押せない状態のボタン。リンクではなくただのspanなので
+         クリックしても何も起きない上、色も灰色にしてひと目で分かるようにする。 */
+      .shift-btn.disabled {
+        background: #bdbdbd;
+        color: #f0f0f0;
+        border-color: #dcdcdc;
+        box-shadow: none;
+        cursor: default;
+      }
+      /* [追加] 「勤怠一覧」ボタン。本葬・通夜のボタンとは役割が違う
+         （状態によってグレーアウトすることはない）ため、色を変えて区別する。 */
+      .nav-block {
+        margin-top: 26px;
+        padding-top: 18px;
+        border-top: 1px dashed #cfeaf0;
+      }
+      /* [追加] 2つ目以降のnav-blockが連続する際に、点線の区切りが
+         二重に見えてしまわないようにする。 */
+      .nav-block + .nav-block {
+        margin-top: 12px;
+        padding-top: 0;
+        border-top: none;
+      }
+      .shift-btn.secondary {
+        background: #077685;
+      }
+      .shift-btn.secondary:hover {
+        background: #055c68;
+      }
+    </style>
+  </head>
+
+    <body>
+
+      <div id="frame">
+        <p class="frame-title">{{user_name}} さん<br />本日の勤務状況</p>
+
+        <div class="shift-block">
+          {% if honso_status == "completed" %}
+          <p class="shift-status">本葬：退勤済み（出勤 {{honso_start}} ／ 退勤 {{honso_end}}）</p>
+          <span class="shift-btn disabled">本 葬（入力済み）</span>
+          {% elif honso_status == "not_started" and tsuya_status != "not_started" %}
+          <!-- [追加] 通夜の出勤時間が入力された時点で、その日はもう本葬の
+               勤務を開始できないようにする（通夜の後に本葬を行うことはない
+               ため。通夜の退勤時間が入力済みかどうかは関係なく恒久的に
+               利用不可にする）。 -->
+          <p class="shift-status">本葬：通夜出勤後のため利用できません</p>
+          <span class="shift-btn disabled">本 葬（利用不可）</span>
+          {% elif honso_status == "not_started" %}
+          <p class="shift-status">本葬：未出勤</p>
+          <a class="shift-btn" href="{{ url_for('honso_stamp') }}">本 葬（出勤する）</a>
+          {% else %}
+          <p class="shift-status">本葬：出勤中（出勤 {{honso_start}}）</p>
+          <a class="shift-btn" href="{{ url_for('honso_modify') }}">本 葬（退勤する）</a>
+          {% endif %}
+        </div>
+
+        <div class="shift-block">
+          {% if honso_status == "in_progress" and tsuya_status != "completed" %}
+          <!-- [追加] 本葬の出勤時間を入力した後は、本葬の退勤時間が
+               入力されるまで通夜のボタンを押せないようにする。
+               （通夜が既に退勤済みの場合はこの制限の対象外＝入力済み表示のまま） -->
+          <p class="shift-status">通夜：本葬の退勤入力後に操作できます</p>
+          <span class="shift-btn disabled">通 夜（本葬退勤待ち）</span>
+          {% elif tsuya_status == "not_started" %}
+          <p class="shift-status">通夜：未出勤</p>
+          <a class="shift-btn" href="{{ url_for('tsuya_stamp') }}">通 夜（出勤する）</a>
+          {% elif tsuya_status == "in_progress" %}
+          <p class="shift-status">通夜：出勤中（出勤 {{tsuya_start}}）</p>
+          <a class="shift-btn" href="{{ url_for('tsuya_modify') }}">通 夜（退勤する）</a>
+          {% else %}
+          <p class="shift-status">通夜：退勤済み（出勤 {{tsuya_start}} ／ 退勤 {{tsuya_end}}）</p>
+          <span class="shift-btn disabled">通 夜（入力済み）</span>
+          {% endif %}
+        </div>
+
+        <div class="nav-block">
+          <a class="shift-btn secondary" href="{{ url_for('attendance_list') }}">勤怠一覧</a>
+        </div>
+
+        <!-- [追加] 「本日の手配書」ボタン。手配者が登録した当日分の画像・メモを
+             確認する画面(/today_arrangement)へのリンク。本葬・通夜の状態には
+             関係なく常に押せる。 -->
+        <div class="nav-block">
+          <a class="shift-btn secondary" href="{{ url_for('today_arrangement') }}">本日の手配書</a>
+        </div>
+      </div>
+
+          <p style="color: gray;text-align: right">{{today}}/{{number}}</p>
+
+
+    </body>
+
+</html>

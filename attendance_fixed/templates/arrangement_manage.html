@@ -1,0 +1,232 @@
+<!-- コメントはこのように書きます -->
+
+<!-- [追加] 手配者アカウント専用の「手配書登録」画面。
+     一般ユーザー・本葬/通夜・日付を指定して、画像とメモを登録する。
+     下部には、これまで登録した手配書の一覧（画像・メモ・削除ボタン付き）を表示する。 -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+    <style>
+      #frame.wide {
+        width: 760px;
+        max-width: 95%;
+      }
+      .error-message {
+        color: #c0392b;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 14px;
+      }
+      .arrangement-form {
+        margin-bottom: 26px;
+        padding-bottom: 18px;
+        border-bottom: 1px dashed #cfeaf0;
+      }
+      .arrangement-form table {
+        width: 100%;
+      }
+      .arrangement-form td {
+        padding: 6px 4px;
+        vertical-align: top;
+      }
+      .arrangement-form td.label {
+        width: 110px;
+        color: #077685;
+        font-weight: bold;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .arrangement-form select,
+      .arrangement-form input[type="date"],
+      .arrangement-form input[type="file"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 5px;
+        font-size: 14px;
+      }
+      .arrangement-form textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+      }
+      .arrangement-form .shift-radio label {
+        margin-right: 18px;
+        font-weight: normal;
+        color: #333;
+      }
+      .arrangement-form .submit-row {
+        text-align: right;
+        margin-top: 10px;
+      }
+      .arrangement-form button {
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 15px;
+        padding: 8px 22px;
+        border: none;
+        border-radius: 16px;
+        background: #418da8;
+        cursor: pointer;
+      }
+      .arrangement-form button:hover {
+        background: #37a4bf;
+      }
+      .arrangement-list h2 {
+        font-size: 16px;
+        color: #077685;
+        margin-bottom: 10px;
+      }
+      .arrangement-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .arrangement-table th,
+      .arrangement-table td {
+        border: 1px solid #cfeaf0;
+        padding: 6px 8px;
+        text-align: center;
+        vertical-align: middle;
+      }
+      .arrangement-table thead th {
+        background: #4eb4c2;
+        color: #ffffff;
+      }
+      .arrangement-table tbody tr:nth-child(even) {
+        background: #f3fbfc;
+      }
+      .arrangement-table .memo-cell {
+        text-align: left;
+        max-width: 220px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .arrangement-thumb {
+        max-width: 70px;
+        max-height: 70px;
+        display: block;
+        margin: 0 auto;
+        border-radius: 4px;
+      }
+      .delete-button {
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 12px;
+        padding: 4px 10px;
+        border: none;
+        border-radius: 10px;
+        background: #c0392b;
+        cursor: pointer;
+      }
+      .delete-button:hover {
+        background: #992d22;
+      }
+      .no-arrangements {
+        color: #077699;
+        text-align: center;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+
+    <body>
+
+      <div id="frame" class="wide">
+        <p class="frame-title">手配書登録</p>
+
+        {% if error_message %}
+        <p class="error-message">{{ error_message }}</p>
+        {% endif %}
+
+        <form class="arrangement-form" method="POST" action="{{ url_for('arrangement_manage') }}" enctype="multipart/form-data">
+          <table>
+            <tr>
+              <td class="label">対象ユーザー</td>
+              <td>
+                <select name="target_user_id" required>
+                  <option value="" disabled selected>選択してください</option>
+                  {% for e in employees %}
+                  <option value="{{ e.id }}">{{ e.username }}（{{ e.number }}）</option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">本葬／通夜</td>
+              <td class="shift-radio">
+                <label><input type="radio" name="shift" value="honso" required> 本葬</label>
+                <label><input type="radio" name="shift" value="tsuya"> 通夜</label>
+              </td>
+            </tr>
+            <tr>
+              <td class="label">日付</td>
+              <td><input type="date" name="date" value="{{ today_str }}" required></td>
+            </tr>
+            <tr>
+              <td class="label">画像</td>
+              <td><input type="file" name="image" accept=".png,.jpg,.jpeg,.gif,.webp"></td>
+            </tr>
+            <tr>
+              <td class="label">メモ</td>
+              <td><textarea name="memo" rows="4" placeholder="連絡事項があれば入力してください"></textarea></td>
+            </tr>
+          </table>
+          <p class="submit-row">
+            <button type="submit">登録する</button>
+          </p>
+        </form>
+
+        <div class="arrangement-list">
+          <h2>登録済みの手配書</h2>
+
+          {% if arrangements %}
+          <table class="arrangement-table">
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>対象ユーザー</th>
+                <th>本葬／通夜</th>
+                <th>画像</th>
+                <th>メモ</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in arrangements %}
+              <tr>
+                <td>{{ a.date }}</td>
+                <td>{{ a.target_user.username if a.target_user else "" }}（{{ a.target_user.number if a.target_user else "" }}）</td>
+                <td>{{ "本葬" if a.shift == "honso" else "通夜" }}</td>
+                <td>
+                  {% if a.image_filename %}
+                  <a href="{{ url_for('arrangement_image', arrangement_id=a.id) }}" target="_blank">
+                    <img class="arrangement-thumb" src="{{ url_for('arrangement_image', arrangement_id=a.id) }}" alt="手配書画像">
+                  </a>
+                  {% endif %}
+                </td>
+                <td class="memo-cell">{{ a.memo or "" }}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('arrangement_delete', arrangement_id=a.id) }}" onsubmit="return confirm('この手配書を削除しますか？');">
+                    <button type="submit" class="delete-button">削除</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="no-arrangements">登録済みの手配書はまだありません。</p>
+          {% endif %}
+        </div>
+      </div>
+
+    </body>
+
+</html>

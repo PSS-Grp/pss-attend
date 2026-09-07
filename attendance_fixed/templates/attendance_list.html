@@ -1,0 +1,192 @@
+<!-- コメントはこのように書きます -->
+
+<!-- [追加] ログイン後のハブ画面(/judge)の「勤怠一覧」ボタンから遷移する、
+     ログイン中の従業員自身の勤怠記録一覧画面。
+     [修正] 表示する年月をクエリパラメータ(year, month)で切り替えられるように
+     し、前月・次月リンクと年月選択のプルダウンから過去の月の記録も
+     見られるようにした。 -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+    <style>
+      /* [追加] 一覧表を表示するため、通常の#frameより幅を広げる */
+      #frame.wide {
+        width: 720px;
+        max-width: 95%;
+      }
+      /* [追加] 前月・次月リンクと年月選択プルダウン用のスタイル */
+      .month-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .month-nav-arrow {
+        font-family: Arial;
+        color: #077685;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: bold;
+        padding: 4px 10px;
+        border: 1px solid #4eb4c2;
+        border-radius: 14px;
+      }
+      .month-nav-arrow:hover {
+        background: #eafbfd;
+      }
+      .month-nav-arrow.disabled {
+        color: #bbbbbb;
+        border-color: #dddddd;
+        cursor: default;
+      }
+      .month-select-form {
+        text-align: center;
+        margin-bottom: 18px;
+      }
+      .month-select-form select {
+        display: inline-block;
+        width: auto;
+        padding: 4px 6px;
+        font-size: 14px;
+        margin: 0 4px;
+      }
+      .month-select-form button {
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 14px;
+        padding: 5px 16px;
+        margin-left: 6px;
+        border: none;
+        border-radius: 14px;
+        background: #418da8;
+        cursor: pointer;
+      }
+      .month-select-form button:hover {
+        background: #37a4bf;
+      }
+      .attendance-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 14px;
+      }
+      .attendance-table th,
+      .attendance-table td {
+        border: 1px solid #cfeaf0;
+        padding: 6px 8px;
+        text-align: center;
+      }
+      .attendance-table thead th {
+        background: #4eb4c2;
+        color: #ffffff;
+        font-weight: bold;
+      }
+      .attendance-table tbody tr:nth-child(even) {
+        background: #f3fbfc;
+      }
+      .attendance-table .section-label {
+        color: #077685;
+        font-weight: bold;
+      }
+      .no-records {
+        color: #077699;
+        font-weight: bold;
+        text-align: center;
+        font-size: 16px;
+        margin: 30px 0;
+      }
+      .back-link {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        margin-top: 24px;
+        text-align: center;
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 18px;
+        padding: 10px 0;
+        text-decoration: none;
+        border-radius: 20px;
+        border: solid #f5fdff 4px;
+        background: #418da8;
+      }
+      .back-link:hover {
+        background: #37a4bf;
+      }
+    </style>
+  </head>
+
+    <body>
+
+      <div id="frame" class="wide">
+        <p class="frame-title">{{user_name}} さん<br />{{year}}年{{month}}月の勤怠一覧</p>
+
+        <div class="month-nav">
+          <a class="month-nav-arrow" href="{{ url_for('attendance_list', year=prev_year, month=prev_month) }}">← 前月</a>
+          {% if next_disabled %}
+          <span class="month-nav-arrow disabled">次月 →</span>
+          {% else %}
+          <a class="month-nav-arrow" href="{{ url_for('attendance_list', year=next_year, month=next_month) }}">次月 →</a>
+          {% endif %}
+        </div>
+
+        <form class="month-select-form" method="GET" action="{{ url_for('attendance_list') }}">
+          <select name="year">
+            {% for y in year_options %}
+            <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}年</option>
+            {% endfor %}
+          </select>
+          <select name="month">
+            {% for m in month_options %}
+            <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}月</option>
+            {% endfor %}
+          </select>
+          <button type="submit">表示</button>
+        </form>
+
+        {% if records %}
+        <table class="attendance-table">
+          <thead>
+            <tr>
+              <th rowspan="2">日付</th>
+              <th colspan="3" class="section-label">本葬</th>
+              <th colspan="3" class="section-label">通夜</th>
+            </tr>
+            <tr>
+              <th>会館名</th>
+              <th>出勤</th>
+              <th>退勤</th>
+              <th>会館名</th>
+              <th>出勤</th>
+              <th>退勤</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in records %}
+            <tr>
+              <td>{{ r.date }}</td>
+              <td>{{ r.place1 or "" }}</td>
+              <td>{{ r.start1 or "" }}</td>
+              <td>{{ r.end1 or "" }}</td>
+              <td>{{ r.place2 or "" }}</td>
+              <td>{{ r.start2 or "" }}</td>
+              <td>{{ r.end2 or "" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="no-records">{{year}}年{{month}}月の勤怠記録はまだありません。</p>
+        {% endif %}
+
+        <a class="back-link" href="{{ url_for('judge') }}">勤務選択画面に戻る</a>
+      </div>
+
+    </body>
+
+</html>

@@ -1,0 +1,91 @@
+<!-- コメントはこのように書きます -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <!--  <title>打刻システム</title>  -->
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+  </head>
+
+
+  <body>
+
+  <form action=/init_view method="post">
+
+
+    <div id="frame">
+      <p class="text">　登録完了 ： {{ current_user.username }} </p>
+    {% if error_message %}
+    <p style="color: red;">{{ error_message }}</p>
+    {% endif %}
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務日／会館名</p>
+        <table>
+          <tr>
+            <td>  
+            <p class="today">{{today}}　</p>
+            </td>
+            <td>
+              <p class="option">本葬　{{place1}}</p>
+              <p class="option">通夜　{{place2}}</p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">本葬勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+              <p class="text">　出勤時間　{{start1}}</p>
+            </td>
+            <td>
+              <p class="text">　出勤時間　{{end1}}</p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+
+    <div id="frame">
+      <p class="frame-title">通夜勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+            <td>  
+              <p class="text">　出勤時間　{{start2}}</p>
+            </td>
+            <td>
+              <p class="text">　出勤時間　{{end2}}</p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <div id="frame">
+      <p class="option-title">通常手当および、特別手当</p>
+              <p class="option">　リーダー　　　{{leader}}</p>
+              <p class="option">　サブリーダー　{{subleader}}</p>
+              <p class="option">　研修　　　　　{{teach}}</p>
+              <p class="option">　待機　　　　　{{wait}}</p>
+              <p class="option">　指定日　　　　{{designated}}</p>
+              <p class="option">　遠方地　　　　{{distant}}</p>
+              <p class="option">　高速道路　　　{{highway}}　金額：{{express}}円</p>
+              <p class="option">　本葬会館名：　{{honso}}</p>
+              <p class="option">　通夜会館名：　{{tsuya}}</p>
+    </div>
+
+      <p class="submit">
+        <input type="submit" value="閉じる" />
+      </p>
+
+  </form>
+  </body>
+
+
+</html>

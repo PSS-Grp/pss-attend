@@ -1,0 +1,195 @@
+<!-- コメントはこのように書きます -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+
+  </head>
+
+  <body>
+
+  <form action=/time_stamp method="post">
+
+    <div id="frame">
+      <p class="name">お名前 ： {{ current_user.username }}</p>
+<!--
+      {% if message %}
+      <p style="color: red;">{{ message }}</p>
+      {% endif %}
+-->
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務日／会館名</p>
+        <table>
+          <tr>
+            <td>  
+              <p class="today">&emsp;{{today}}</p>
+            </td>
+            <td>
+              <p>　本葬　</p>
+              <p>　通夜　</p>
+            </td>
+            <td>
+              <p class="select">
+                <select id="place1" name="place1" enabled>
+                  <option>{{place1}}</option>
+                  <option>愛知葬祭 春日井会場</option>
+                  <option>平安会館 一宮斎場</option>
+                  <option>項目4</option>
+                  <option>項目5</option>
+                  <option>項目6</option>
+                  <option>項目7</option>
+                  <option>項目8</option>
+                  <option>その他</option>
+                </select>
+                <select id="place2" name="place2">
+                  <option>{{place2}}</option>
+                  <option>愛知葬祭 吹上会場</option>
+                  <option>平安会館 名古屋斎場</option>
+                  <option>項目4</option>
+                  <option>項目5</option>
+                  <option>項目6</option>
+                  <option>項目7</option>
+                  <option>項目8</option>
+                  <option>その他</option>
+                </select>
+              </p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <script>
+      document.getElementById("place1").addEventListener("change", function(){
+        var place1_elem = document.getElementById("place1");
+        var select_value = place1_elem.options[place1_elem.selectedIndex].value;
+        var start1_elem = document.getElementById("start1");
+        var end1_elem = document.getElementById("end1");
+        var honso_elem = document.getElementById("honso");
+
+        if(select_value == "選択してください"){
+                start1_elem.disabled = true;
+    		end1_elem.disabled = true;
+        }else{
+                start1_elem.disabled = false;
+                end1_elem.disabled = false;
+        }
+        if(select_value == "その他"){
+                honso_elem.disabled = false;
+        }else{
+                honso_elem.disabled = true;
+        }
+      }, false);
+    </script>
+    
+    <script>
+      document.getElementById("place2").addEventListener("change", function(){
+        var place2_elem = document.getElementById("place2");
+        var place1_elem = document.getElementById("place1");
+        var select_value = place2_elem.options[place2_elem.selectedIndex].value;
+        var start2_elem = document.getElementById("start2");
+        var end2_elem = document.getElementById("end2");
+        var tsuya_elem = document.getElementById("tsuya");
+
+        if(select_value == "選択してください"){
+                start2_elem.disabled = true;
+                end2_elem.enabled = false;
+                place1_elem.disabled = true;
+        }else{
+                start2_elem.disabled = false;
+                end2_elem.disabled = false;
+        }
+        if(select_value == "その他"){
+                tsuya_elem.disabled = false;
+        }else{
+                tsuya_elem.disabled = true;
+        }
+      }, false);
+    </script>
+
+    <div id="frame">
+      <p class="frame-title">本葬勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+              <p>出勤時間</p>
+              <p>
+              <input type="time" disabled id="start1" name="start1" value="{{start1}}" />
+              </p>
+            </td>
+            <td>
+              <p>退勤時間</p>
+              <p>
+              <input type="time" disabled id="end1" name="end1" value="{{end1}}" />
+              </p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">通夜勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+              <p>出勤時間</p>
+              <p>
+              <input type="time" disabled id="start2" name="start2" value="{{start2}}" />
+              </p>
+            </td>
+            <td>
+              <p>退勤時間</p>
+              <p>
+              <input type="time" disabled id="end2"  name="end2" value="{{end2}}"  />
+              </p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <div id="frame">
+      <p class="option-title">通常手当および、特別手当</p>
+      <p class="option">
+        &emsp;<input type="checkbox" id="leader" name="leader" />&emsp;
+        <label for="leader">リーダー</label><br />
+
+        &emsp;<input type="checkbox" id="subleader" name="subleader" />&emsp;
+        <label for="leader">サブリーダー</label><br />
+
+        &emsp;<input type="checkbox" id="teach" name="teach" />&emsp;
+        <label for="teach">研修</label><br />
+
+        &emsp;<input type="checkbox" id="wait" name="wait" />&emsp;
+        <label for="wait">待機</label><br />
+
+        &emsp;<input type="checkbox" id="designated" name="designated" />&emsp;
+        <label for="Designated">指定日</label><br />
+
+        &emsp;<input type="checkbox" id="distant" name="distant" />&emsp;
+        <label for="distant">遠方地 </label><br />
+
+        &emsp;<input type="checkbox" id="highway" name="highway" />&emsp;
+        <label for="distant">高速道路</label>
+        <input type="text" disabled id="express" name="express" placeholder="金額" /><br /><br />
+
+        <label for="honso">　本葬会館名：</label>
+        <input type="text" disabled id="honso" name="honso" placeholder="会館名" /><br />
+
+        <label for="tsuya">　通夜会館名：</label>
+        <input type="text" disabled id="tsuya" name="tsuya" placeholder="会館名" /><br />
+      </p>
+    </div>
+
+      <p class="submit">
+        <input type="submit" value="登録" />
+      </p>
+
+  </form>
+  </body>
+
+
+</html>

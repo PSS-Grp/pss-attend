@@ -1,0 +1,160 @@
+<!-- コメントはこのように書きます -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}：{{record_id}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+
+  </head>
+
+  <body>
+
+  <form action=/tsuya_stamp method="post">
+
+    <div id="frame">
+      <p class="frame-title">通夜</p>
+      <p class="name">お名前 ： {{ current_user.username }}</p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務日／会館名</p>
+        <table>
+          <tr>
+            <td>  
+              <p class="today">{{today}}　</p>
+            </td>
+            <td>  
+              <p class="select">会館　</p>
+            </td>
+            <td>  
+                <!-- [修正] 会館名の一覧を全ユーザー共通の固定リストから、
+                     ログイン中のユーザーごとに異なる一覧（places, tsuya.pyのget_places_for_current_userで取得）
+                     を表示するように変更。「その他」は従来通り末尾に固定で残し、
+                     手動入力(other2)も引き続き使えるようにしている。 -->
+                <select id="place2" name="place2" required>
+                  <option value="" disabled selected>選択してください。</option>
+                  {% for p in places %}
+                  <option>{{ p }}</option>
+                  {% endfor %}
+                  <option>その他</option>
+                </select>
+            </td>
+          </tr>
+        </table>
+        <p>
+        <label for="other2">　その他：</label>
+        <input type="text" required disabled id="other2" name="other2" placeholder="会 館 名" /></p>
+    </div>
+
+    <script>
+      document.getElementById("place2").addEventListener("change", function(){
+        var place2_elem = document.getElementById("place2");
+//      console.log(place2_elem);
+        var place2_select_value = place2_elem.options[place2_elem.selectedIndex].value;
+        var start2_elem = document.getElementById("start2");
+        var end2_elem = document.getElementById("end2");
+        var other2_elem = document.getElementById("other2");
+
+        if(place2_select_value == "選択してください"){
+                start2_elem.disabled = true; //グレーアウト
+        }else{
+                start2_elem.disabled = false;
+        }
+        if(place2_select_value == "その他"){
+                other2_elem.disabled = false;
+        }else{
+                other2_elem.disabled = true;
+        }
+      }, false);
+    </script>
+
+    <div id="frame">
+      <p class="frame-title">勤務時間</p>
+        <table>
+          <tr>
+            <td>  
+              <p>出勤時間</p>
+            </td>
+            <td>  
+              <p>退勤時間</p>
+            </td>
+          </tr>
+          <tr>
+            <td>  
+              <p>
+              <input type="time" required disabled id="start2" name="start2" value="{{start2}}" />
+              </p>
+            </td>
+            <td>
+              <p>
+              <input type="time" disabled id="end2" name="end2" value="{{end2}}" />
+              </p>
+            </td>
+          </tr>
+        </table>
+    </div>
+
+    <script>
+      document.getElementById("start2").addEventListener("change", function(){
+        var start2_value = document.getElementById("start2").value;
+        var end2_elem = document.getElementById("end2");
+        if(start2_value == "" ){
+    		end2_elem.disabled = true;   //グレーアウト
+        }else{
+                end2_elem.disabled = false;
+        }
+      }, false);
+    </script>
+
+    <div id="frame">
+      <p class="frame-title">手当</p>
+      <p class="option">
+        &emsp;<input type="checkbox" id="leader2" name="leader2" />&emsp;
+        <label for="leader2">リーダー</label><br />
+
+        &emsp;<input type="checkbox" id="subleader2" name="subleader2" />&emsp;
+        <label for="subleader2">サブリーダー</label><br />
+
+        &emsp;<input type="checkbox" id="teach2" name="teach2" />&emsp;
+        <label for="teach2">研修</label><br />
+
+        &emsp;<input type="checkbox" id="wait2" name="wait2" />&emsp;
+        <label for="wait2">待機</label><br />
+
+        &emsp;<input type="checkbox" id="designated2" name="designated2" />&emsp;
+        <label for="designated2">指定日</label><br />
+
+        &emsp;<input type="checkbox" id="distant2" name="distant2" />&emsp;
+        <label for="distant2">遠方地 </label><br />
+
+        &emsp;<input type="checkbox" id="special2" name="special2" />&emsp;
+        <label for="special2">特別手当</label><br />
+
+        &emsp;<input type="checkbox" id="highway2" name="highway2" onchange="change()"/>&emsp;
+        <label for="highway2">高速道路</label>
+        <input type="number" required disabled id="express2" name="express2" placeholder="金額" /><br /><br />
+      </p>
+    </div>
+
+      <script>
+        var express2_elem = document.getElementById("express2");
+        function change() {
+          if (document.getElementById("highway2").checked) {
+    		express2_elem.disabled = false;   //trueグレーアウト
+          } else {
+                express2_elem.disabled = true;
+          }
+        }
+      </script>
+
+      <p class="submit">
+        <input type="submit" value="登録" />
+      </p>
+
+  </form>
+  </body>
+
+
+</html>

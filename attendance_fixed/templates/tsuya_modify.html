@@ -1,0 +1,101 @@
+<!-- コメントはこのように書きます -->
+
+<!-- <tr> 表の行 </tr> -->
+<!-- <td> データ </td> -->
+<!-- <th> 見出し </th> -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}：{{record_id}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+
+  </head>
+
+  <body>
+
+  <form action=/tsuya_modify method="post">
+
+    <div id="frame">
+      <p class="frame-title">通夜</p>
+      <p class="name">お名前 ： {{ current_user.username }}</p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務日／会館名</p>
+      <p class="today">{{today}}　<span class="option">{{place2}}　{{other2}}</span></p>
+    </div>
+
+    <div id="frame">
+      <p class="frame-title">勤務時間</p>
+        <table width="100%">
+          <tr>
+            <td width="35%">  
+              <p>出勤時間</p>
+            </td>
+            <td width="35%">  
+              <p>退勤時間</p>
+            </td>
+          </tr>
+          <tr>
+            <td width="35%">  
+              <p>{{start2}}</p>
+            </td>
+            <td width="35%">  
+              <p>
+              <input type="time" required id="end2" name="end2" value="{{end2}}" />
+              </p>
+            </td>
+          </tr>
+        </table>
+    </div>
+    <div id="frame">
+      <p class="frame-title">手当</p>
+      <p class="option">
+        &emsp;<input type="checkbox" id="leader2" name="leader2" {{leader2}}/>&emsp;
+        <label for="leader">リーダー</label><br />
+
+        &emsp;<input type="checkbox" id="subleader2" name="subleader2" {{subleader2}}/>&emsp;
+        <label for="subleader">サブリーダー</label><br />
+
+        &emsp;<input type="checkbox" id="teach2" name="teach2" {{teach2}}/>&emsp;
+        <label for="teach">研修</label><br />
+
+        &emsp;<input type="checkbox" id="wait2" name="wait2" {{wait2}}/>&emsp;
+        <label for="wait">待機</label><br />
+
+        &emsp;<input type="checkbox" id="designated2" name="designated2" {{designated2}}/>&emsp;
+        <label for="designated">指定日</label><br />
+
+        &emsp;<input type="checkbox" id="distant2" name="distant2" {{distant2}}/>&emsp;
+        <label for="distant">遠方地</label><br />
+
+        &emsp;<input type="checkbox" id="special2" name="special2" {{special2}}/>&emsp;
+        <label for="special2">特別手当</label><br />
+
+        &emsp;<input type="checkbox" id="highway2" name="highway2" onchange="change()" {{highway2}}/>&emsp;
+        <label for="distant">高速道路</label>
+        <input type="number" required disabled id="express2" name="express2" placeholder="金額" value="{{express2}}"/><br />
+      </p>
+    </div>
+
+      <script>
+        var express2_elem = document.getElementById("express2");
+        function change() {
+          if (document.getElementById("highway2").checked) {
+    		express2_elem.disabled = false;   //trueグレーアウト
+          } else {
+                express2_elem.disabled = true;
+          }
+        }
+      </script>
+
+      <p class="submit">
+        <input type="submit" value="登録" />
+      </p>
+
+  </form>
+  </body>
+
+</html>

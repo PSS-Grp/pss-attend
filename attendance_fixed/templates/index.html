@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>アテンド事業部パートさん用</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+  </head>
+  <body>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <ul class=flashes>
+    {% for category, message in messages %}
+      <li class="{{ category }}">{{ message }}</li>
+    {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+    <div id="form">
+      <p class="form-title">INDEX WEB勤怠システム</p>
+      <!_form action="post"_>
+<!--
+        <form action="http://127.0.0.1:5000/time_stamp">
+-->
+        <p>ユーザ名</p>
+        <p class="user">
+          <input type="text" name="user" />
+        </p>
+        <p>パスワード</p>
+        <p class="pass">
+          <input type="password" name="pass" />
+        </p>
+        <p class="check">
+          <input type="checkbox" name="checkbox" /> パスワードを保存
+        </p>
+        <p class="submit">
+          <input type="submit" value="ログイン" />
+        </p>
+      </form>
+    {% if error_message %}
+    <p style="color: red;">{{ error_message }}</p>
+    {% endif %}
+    </div>
+  </body>
+</html>

@@ -1,0 +1,111 @@
+<!-- コメントはこのように書きます -->
+
+<!-- [追加] 一般ユーザーが「本日の手配書」ボタンから開く画面。
+     ログイン中の本人・本日日付の分の画像とメモを、本葬・通夜それぞれ表示する。 -->
+
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{title}}</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+    <style>
+      #frame.wide {
+        width: 640px;
+        max-width: 95%;
+      }
+      .arrangement-block {
+        margin-bottom: 24px;
+        padding-bottom: 18px;
+        border-bottom: 1px dashed #cfeaf0;
+      }
+      .arrangement-block:last-of-type {
+        border-bottom: none;
+      }
+      .arrangement-block h2 {
+        color: #4eb4c2;
+        font-size: 18px;
+        text-align: center;
+        margin-bottom: 12px;
+      }
+      .arrangement-image {
+        display: block;
+        max-width: 100%;
+        margin: 0 auto 12px auto;
+        border-radius: 6px;
+        border: 1px solid #cfeaf0;
+      }
+      .arrangement-memo {
+        color: #333;
+        font-size: 15px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #f3fbfc;
+        border-radius: 6px;
+        padding: 10px 14px;
+      }
+      .no-arrangement {
+        color: #077699;
+        text-align: center;
+        margin: 10px 0;
+      }
+      .back-link {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        margin-top: 24px;
+        text-align: center;
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 18px;
+        padding: 10px 0;
+        text-decoration: none;
+        border-radius: 20px;
+        border: solid #f5fdff 4px;
+        background: #418da8;
+      }
+      .back-link:hover {
+        background: #37a4bf;
+      }
+    </style>
+  </head>
+
+    <body>
+
+      <div id="frame" class="wide">
+        <p class="frame-title">本日の手配書<br />{{today}}</p>
+
+        <div class="arrangement-block">
+          <h2>本葬</h2>
+          {% if honso_arrangement %}
+            {% if honso_arrangement.image_filename %}
+            <img class="arrangement-image" src="{{ url_for('arrangement_image', arrangement_id=honso_arrangement.id) }}" alt="本葬の手配書画像">
+            {% endif %}
+            {% if honso_arrangement.memo %}
+            <p class="arrangement-memo">{{ honso_arrangement.memo }}</p>
+            {% endif %}
+          {% else %}
+          <p class="no-arrangement">本日の本葬の手配書はまだ登録されていません。</p>
+          {% endif %}
+        </div>
+
+        <div class="arrangement-block">
+          <h2>通夜</h2>
+          {% if tsuya_arrangement %}
+            {% if tsuya_arrangement.image_filename %}
+            <img class="arrangement-image" src="{{ url_for('arrangement_image', arrangement_id=tsuya_arrangement.id) }}" alt="通夜の手配書画像">
+            {% endif %}
+            {% if tsuya_arrangement.memo %}
+            <p class="arrangement-memo">{{ tsuya_arrangement.memo }}</p>
+            {% endif %}
+          {% else %}
+          <p class="no-arrangement">本日の通夜の手配書はまだ登録されていません。</p>
+          {% endif %}
+        </div>
+
+        <a class="back-link" href="{{ url_for('judge') }}">勤務選択画面に戻る</a>
+      </div>
+
+    </body>
+
+</html>
