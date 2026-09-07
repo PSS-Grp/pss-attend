@@ -197,28 +197,47 @@ def arrangement_image(arrangement_id):
 
 #------------------------------------------------
 # 「本日の手配書」画面（一般ユーザー用）。
-# ログイン中の本人・本日日付の分だけを、本葬・通夜それぞれ表示する。
-# `get_today()` で呼び出し都度の現在日付を求めることで、本葬・通夜の
-# 勤怠記録(Time)と同じ「本日」の考え方に揃えている。
+# ログイン中の本人・指定した日付の分だけを、本葬・通夜それぞれ表示する。
+# [追加] クエリパラメータ(date)で表示する日付を切り替えられるようにし、
+# 前日・翌日リンクから他の日の手配書も確認できるようにした
+# （attendance_list()のyear/month切り替えと同じ考え方）。
+# 指定が無い場合や、日付として解釈できない値が渡された場合は、
+# `get_today()`（呼び出し都度の現在日付）を表示する。
+# 手配書は勤怠記録と違い、手配者が翌日以降の分を事前に登録しておく
+# ことも想定されるため、attendance_list()の「次月」と異なり、未来日への
+# 移動を制限してはいない。
 #------------------------------------------------
 @app.route('/today_arrangement')
 @login_required
 def today_arrangement():
 
     today_str = get_today()
-    today = today_str
+
+    date_param = request.args.get('date')
+    try:
+        view_date = datetime.date.fromisoformat(date_param) if date_param else datetime.date.fromisoformat(today_str)
+    except ValueError:
+        view_date = datetime.date.fromisoformat(today_str)
+
+    view_date_str = view_date.isoformat()
+    prev_date_str = (view_date - datetime.timedelta(days=1)).isoformat()
+    next_date_str = (view_date + datetime.timedelta(days=1)).isoformat()
+    is_today = view_date_str == today_str
 
     honso_arrangement = Arrangement.query.filter_by(
-        target_user_id=current_user.id, shift="honso", date=today_str
+        target_user_id=current_user.id, shift="honso", date=view_date_str
     ).first()
     tsuya_arrangement = Arrangement.query.filter_by(
-        target_user_id=current_user.id, shift="tsuya", date=today_str
+        target_user_id=current_user.id, shift="tsuya", date=view_date_str
     ).first()
 
     return render_template(
         'today_arrangement.html',
         title="本日の手配書",
-        today=today,
+        view_date=view_date_str,
+        is_today=is_today,
+        prev_date=prev_date_str,
+        next_date=next_date_str,
         honso_arrangement=honso_arrangement,
         tsuya_arrangement=tsuya_arrangement,
     )

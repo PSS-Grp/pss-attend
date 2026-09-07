@@ -12,6 +12,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
     <style>
@@ -123,15 +124,16 @@
           {% endif %}
         </div>
 
-        <div class="nav-block">
-          <a class="shift-btn secondary" href="{{ url_for('attendance_list') }}">勤怠一覧</a>
-        </div>
-
-        <!-- [追加] 「本日の手配書」ボタン。手配者が登録した当日分の画像・メモを
-             確認する画面(/today_arrangement)へのリンク。本葬・通夜の状態には
-             関係なく常に押せる。 -->
+        <!-- [修正] ユーザー要望により「本日の手配書」ボタンを「勤怠一覧」より
+             上に表示する順序に入れ替えた。「本日の手配書」ボタン。手配者が
+             登録した当日分の画像・メモを確認する画面(/today_arrangement)への
+             リンク。本葬・通夜の状態には関係なく常に押せる。 -->
         <div class="nav-block">
           <a class="shift-btn secondary" href="{{ url_for('today_arrangement') }}">本日の手配書</a>
+        </div>
+
+        <div class="nav-block">
+          <a class="shift-btn secondary" href="{{ url_for('attendance_list') }}">勤怠一覧</a>
         </div>
       </div>
 

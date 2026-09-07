@@ -8,6 +8,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
     <style>
@@ -85,6 +86,7 @@
       }
       .arrangement-table {
         width: 100%;
+        min-width: 560px;
         border-collapse: collapse;
         font-size: 13px;
       }
@@ -187,6 +189,9 @@
           <h2>登録済みの手配書</h2>
 
           {% if arrangements %}
+          <!-- [追加] スマートフォンなど画面の狭い端末で列がつぶれてしまわないよう、
+               表を横スクロール可能なコンテナ(.table-scroll, style.css参照)で囲む。 -->
+          <div class="table-scroll">
           <table class="arrangement-table">
             <thead>
               <tr>
@@ -221,6 +226,7 @@
               {% endfor %}
             </tbody>
           </table>
+          </div>
           {% else %}
           <p class="no-arrangements">登録済みの手配書はまだありません。</p>
           {% endif %}

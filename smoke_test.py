@@ -563,6 +563,26 @@ assert r_today_0002.status_code == 200
 assert "本日は通夜の受付を17時から開始してください。".encode("utf-8") in r_today_0002.data
 # 本葬側はまだ未登録なので「まだ登録されていません」と表示される
 assert "本日の本葬の手配書はまだ登録されていません。".encode("utf-8") in r_today_0002.data
+# [追加] スマートフォン対応のためのviewport metaタグがあることを確認
+assert 'name="viewport"'.encode("utf-8") in r_today_0002.data
+
+# [追加] 前日・翌日リンクがあり、翌日に移動すると本日分のメモは
+# 表示されず、そこから前日リンクで本日に戻ってくると再び表示されることを確認
+tomorrow_str = (today + datetime.timedelta(days=1)).isoformat()
+yesterday_str = (today - datetime.timedelta(days=1)).isoformat()
+assert f'href="/today_arrangement?date={tomorrow_str}"'.encode("utf-8") in r_today_0002.data
+assert f'href="/today_arrangement?date={yesterday_str}"'.encode("utf-8") in r_today_0002.data
+
+r_tomorrow_0002 = client_0002_arrangement.get(
+    f"/today_arrangement?date={tomorrow_str}", follow_redirects=False
+)
+print(f"GET /today_arrangement?date={tomorrow_str} (0002, 翌日には本日のメモは無い) ->", r_tomorrow_0002.status_code)
+assert r_tomorrow_0002.status_code == 200
+assert "本日は通夜の受付を17時から開始してください。".encode("utf-8") not in r_tomorrow_0002.data
+assert "本日に戻る".encode("utf-8") in r_tomorrow_0002.data
+
+r_back_today_0002 = client_0002_arrangement.get("/today_arrangement", follow_redirects=False)
+assert "本日は通夜の受付を17時から開始してください。".encode("utf-8") in r_back_today_0002.data
 
 # 別の従業員(0001)には0002宛ての手配書は見えない
 r_today_0001 = client.get("/today_arrangement", follow_redirects=False)
@@ -575,6 +595,12 @@ r_judge_arrangement_btn = client_0002_arrangement.get("/judge", follow_redirects
 print("GET /judge (本日の手配書ボタンの確認) ->", r_judge_arrangement_btn.status_code)
 assert "本日の手配書".encode("utf-8") in r_judge_arrangement_btn.data
 assert 'href="/today_arrangement"'.encode("utf-8") in r_judge_arrangement_btn.data
+# [追加] ユーザー要望により「本日の手配書」ボタンが「勤怠一覧」ボタンより
+# 上（HTML内で先）に表示される順序に入れ替えたことを確認
+_pos_arrangement_btn = r_judge_arrangement_btn.data.find('href="/today_arrangement"'.encode("utf-8"))
+_pos_attendance_btn = r_judge_arrangement_btn.data.find('href="/attendance_list"'.encode("utf-8"))
+assert _pos_arrangement_btn != -1 and _pos_attendance_btn != -1
+assert _pos_arrangement_btn < _pos_attendance_btn
 
 # --- 画像アップロードとアクセス制御の確認 ---
 

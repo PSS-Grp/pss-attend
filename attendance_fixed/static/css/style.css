@@ -3,9 +3,30 @@
 body,p,frame,input {
   margin: 0;
 }
+
+/* [追加] スマートフォン対応。
+   ・box-sizing: border-boxを全体に適用し、paddingやborderを幅に
+     含めて計算するようにする（これが無いと、下の#frameのmax-width指定が
+     効いていても、paddingの分だけ実際の表示幅がはみ出してしまう）。
+   ・input/select/textareaの幅がデバイスの画面幅を超えないよう上限を
+     設ける（もともと200〜240px固定のものがあり、非常に幅の狭い端末では
+     はみ出す可能性があるため）。
+   なお、これらのCSSが実際にスマートフォンで効くためには、各テンプレートの
+   <head>に <meta name="viewport" content="width=device-width, initial-scale=1"> が
+   必要（無いとブラウザがPC向けの幅(980px相当)で描画してから縮小表示するため、
+   文字が小さく操作しづらくなる）。今回あわせて主要な画面に追加した。 */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+input, select, textarea, button {
+  max-width: 100%;
+}
+
 /* ------------------------------------------------------ */
 #frame {
   width: 400px;
+  max-width: 92vw;
   margin: 30px auto;
   padding: 20px;
   border: 1px solid #555;
@@ -17,6 +38,25 @@ body,p,frame,input {
   box-shadow: 0px 1px 10px #488a9e;
   border: solid #4eb4c2 1px;
   background: #fafafa;
+}
+
+/* [追加] 画面幅がかなり狭い端末では、#frame同士の余白(margin: 30px auto)も
+   詰めて、縦方向のスクロール量を減らす。 */
+@media (max-width: 480px) {
+  #frame {
+    margin: 16px auto;
+    padding: 16px;
+  }
+}
+
+/* [追加] スマートフォンで表示した際に、勤怠一覧・手配書一覧などの表が
+   画面幅からはみ出してレイアウト全体が崩れることがないよう、表を
+   横スクロール可能なコンテナで囲む（各テンプレート側で
+   class="table-scroll" を表に被せて使う）。 */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 #frame p {
@@ -62,9 +102,9 @@ body,p,frame,input {
 /* ------------------------------------------------------ */
 /* class="select" */
 select {
-  display: block;           /* �u���b�N���x���v�f������ */
-  width: 150px;             /* �{�b�N�X�̍������w�肷�� */
-  background: transparent;  /* �w�i�𓧉ߎw�肷�� */
+  display: block;           /* �u���b�N���x���v�f������ */
+  width: 150px;             /* �{�b�N�X�̍������w�肷�� */
+  background: transparent;  /* �w�i�𓧉ߎw�肷�� */
   padding: 4px;
 }
 
@@ -180,7 +220,7 @@ input[type="time"] {
 
 
 
-/* #id���ɂ��Z���N�^�w�� HTML�\�[�X����id�����Z���N�^�Ɏw�肷����@�ł��B */
+/* #id���ɂ��Z���N�^�w�� HTML�\�[�X����id�����Z���N�^�Ɏw�肷����@�ł��B */
 
 /*
 .time {

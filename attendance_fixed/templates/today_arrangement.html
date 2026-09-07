@@ -1,12 +1,18 @@
 <!-- コメントはこのように書きます -->
 
 <!-- [追加] 一般ユーザーが「本日の手配書」ボタンから開く画面。
-     ログイン中の本人・本日日付の分の画像とメモを、本葬・通夜それぞれ表示する。 -->
+     ログイン中の本人・指定した日付の分の画像とメモを、本葬・通夜それぞれ
+     表示する。
+     [修正] 「← 前日」「翌日 →」リンクを追加し、本日だけでなく前日・翌日
+     （手配者が事前に登録した先の予定なども含む）の手配書も確認できる
+     ようにした。表示中の日付が本日でない場合は「本日に戻る」リンクも
+     表示する。 -->
 
 <!DOCTYPE html>
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
     <style>
@@ -49,6 +55,35 @@
         text-align: center;
         margin: 10px 0;
       }
+      /* [追加] 前日・翌日リンクと「本日に戻る」リンク用のスタイル
+         （attendance_list.htmlの月切り替えリンクと同じ考え方）。 */
+      .date-nav {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        margin-bottom: 8px;
+      }
+      .date-nav-arrow {
+        font-family: Arial;
+        color: #077685;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: bold;
+        padding: 4px 10px;
+        border: 1px solid #4eb4c2;
+        border-radius: 14px;
+      }
+      .date-nav-arrow:hover {
+        background: #eafbfd;
+      }
+      .today-reset {
+        display: block;
+        text-align: center;
+        font-size: 13px;
+        color: #077685;
+        margin-bottom: 18px;
+      }
       .back-link {
         display: block;
         box-sizing: border-box;
@@ -72,8 +107,20 @@
 
     <body>
 
+      <!-- [追加] is_todayに応じて「本日」または実際の日付で文言を出し分ける
+           ための変数。前日・翌日画面でも自然な日本語になるようにしている。 -->
+      {% set day_label = "本日" if is_today else view_date %}
+
       <div id="frame" class="wide">
-        <p class="frame-title">本日の手配書<br />{{today}}</p>
+        <p class="frame-title">{% if is_today %}本日の手配書{% else %}手配書{% endif %}<br />{{view_date}}</p>
+
+        <div class="date-nav">
+          <a class="date-nav-arrow" href="{{ url_for('today_arrangement', date=prev_date) }}">← 前日</a>
+          <a class="date-nav-arrow" href="{{ url_for('today_arrangement', date=next_date) }}">翌日 →</a>
+        </div>
+        {% if not is_today %}
+        <a class="today-reset" href="{{ url_for('today_arrangement') }}">本日に戻る</a>
+        {% endif %}
 
         <div class="arrangement-block">
           <h2>本葬</h2>
@@ -85,7 +132,7 @@
             <p class="arrangement-memo">{{ honso_arrangement.memo }}</p>
             {% endif %}
           {% else %}
-          <p class="no-arrangement">本日の本葬の手配書はまだ登録されていません。</p>
+          <p class="no-arrangement">{{day_label}}の本葬の手配書はまだ登録されていません。</p>
           {% endif %}
         </div>
 
@@ -99,7 +146,7 @@
             <p class="arrangement-memo">{{ tsuya_arrangement.memo }}</p>
             {% endif %}
           {% else %}
-          <p class="no-arrangement">本日の通夜の手配書はまだ登録されていません。</p>
+          <p class="no-arrangement">{{day_label}}の通夜の手配書はまだ登録されていません。</p>
           {% endif %}
         </div>
 
