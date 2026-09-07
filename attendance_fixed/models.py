@@ -106,7 +106,14 @@ class Time(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.String(10))
     number = db.Column(db.String(8))
-    place1 = db.Column(db.String(10))
+    # [修正/Neon対応] place1/place2（選択した会館名）・other1/other2
+    # （「その他」選択時に手入力する会館名）は、SQLiteでは文字数上限が
+    # 事実上チェックされないため気づかなかったが、db.String(10)のままだと
+    # 実際の会館名（例:「名古屋メモリアルホール」で11文字）が入らず、
+    # 文字数を厳格にチェックするPostgreSQL(Neon)では
+    # "value too long for type character varying(10)" エラーで
+    # 保存できなかった。会館名(Place.place)の上限に合わせて255文字に広げた。
+    place1 = db.Column(db.String(255))
     start1 = db.Column(db.String(10))
     end1 = db.Column(db.String(10))
     leader1 = db.Column(db.String(10))
@@ -117,9 +124,9 @@ class Time(db.Model):
     distant1 = db.Column(db.String(10))
     highway1 = db.Column(db.String(10))
     express1 = db.Column(db.String(10))
-    other1 = db.Column(db.String(10))
+    other1 = db.Column(db.String(255))
     special1 = db.Column(db.String(10))
-    place2 = db.Column(db.String(10))
+    place2 = db.Column(db.String(255))
     start2 = db.Column(db.String(10))
     end2 = db.Column(db.String(10))
     leader2 = db.Column(db.String(10))
@@ -130,7 +137,7 @@ class Time(db.Model):
     distant2 = db.Column(db.String(10))
     highway2 = db.Column(db.String(10))
     express2 = db.Column(db.String(10))
-    other2 = db.Column(db.String(10))
+    other2 = db.Column(db.String(255))
     special2 = db.Column(db.String(10))
 
 

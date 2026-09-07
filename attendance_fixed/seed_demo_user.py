@@ -42,7 +42,7 @@ os.chdir(APP_DIR)
 from __init__ import app, db  # noqa: E402
 from models import User, Place, Time, Arrangement  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
-from sqlalchemy.exc import IntegrityError  # noqa: E402
+from sqlalchemy.exc import IntegrityError, DataError  # noqa: E402
 
 ADMIN_NUMBER = os.environ.get("ADMIN_USER_NUMBER", "9001")
 ADMIN_NAME = os.environ.get("ADMIN_USER_NAME", "管理者")
@@ -202,8 +202,18 @@ def _create_sample_attendance_for_employee(number, places):
             # 衝突で他の正常な行までロールバックされてしまうため）。
             db.session.commit()
             created += 1
-        except IntegrityError:
+        except (IntegrityError, DataError):
+            # [追加/Neon対応] DataError（例: PostgreSQLで文字数上限を
+            # 超えたためのStringDataRightTruncationなど）も、1件だけ
+            # スキップしてロールバックする。以前はIntegrityErrorしか
+            # 捕まえていなかったため、サンプル勤怠データの作成中にこの
+            # 種のエラーが起きるとアプリ起動処理全体が異常終了して
+            # しまっていた（Time.place1等の文字数上限が短すぎた不具合を
+            # 機に発覚）。根本原因（models.pyの文字数上限）自体は修正済みだが、
+            # 同種の想定外エラーで再度アプリ全体が落ちてしまわないよう、
+            # 保険として広めに捕まえるようにした。
             db.session.rollback()
+            print(f"    サンプル勤怠記録の作成に失敗したためスキップしました（日付: {date_str}）。")
 
     return created
 
