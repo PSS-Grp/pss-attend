@@ -654,7 +654,64 @@ r_invalid = client_arranger.post(
 )
 print("POST /arrangement_manage (画像・メモどちらも無し) ->", r_invalid.status_code)
 assert r_invalid.status_code == 200
-assert "画像またはメモのいずれかを入力してください。".encode("utf-8") in r_invalid.data
+assert "画像・PDF・メモのいずれかを入力してください。".encode("utf-8") in r_invalid.data
+
+# --- [追加] PDFアップロードの確認（会館案内図などPDFで渡されることも
+#     多いため、画像に加えてPDFも登録できるようにした） ---
+with app.app_context():
+    target_0003_id = User.query.filter_by(number="0003").first().id
+
+r_create_pdf = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_0003_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "",
+        "image": (io.BytesIO(b"%PDF-1.4 fake-pdf-bytes-for-smoke-test"), "chizu.pdf"),
+    },
+    content_type="multipart/form-data",
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (PDF付き, 0003宛て・本葬) ->", r_create_pdf.status_code, r_create_pdf.headers.get("Location"))
+assert r_create_pdf.status_code == 302
+
+with app.app_context():
+    arr_pdf = Arrangement.query.filter_by(
+        target_user_id=target_0003_id, shift="honso", date=today_str
+    ).first()
+    assert arr_pdf is not None
+    assert arr_pdf.image_filename is not None
+    assert arr_pdf.image_filename.lower().endswith(".pdf")
+    arr_pdf_id = arr_pdf.id
+
+r_pdf_fetch = client_arranger.get(f"/arrangement_image/{arr_pdf_id}", follow_redirects=False)
+print("GET /arrangement_image (PDF) ->", r_pdf_fetch.status_code, r_pdf_fetch.content_type)
+assert r_pdf_fetch.status_code == 200
+assert r_pdf_fetch.data == b"%PDF-1.4 fake-pdf-bytes-for-smoke-test"
+assert "application/pdf" in r_pdf_fetch.content_type
+
+# 対象ユーザー(0003)の「本日の手配書」画面では、<img>ではなく
+# PDFを開くリンクとして表示されることを確認
+client_0003_arrangement = app.test_client()
+client_0003_arrangement.post(
+    "/login", data={"login": "ログイン", "number": "0003", "password": "demo3456"}
+)
+r_today_0003 = client_0003_arrangement.get("/today_arrangement", follow_redirects=False)
+print("GET /today_arrangement (0003, PDFの手配書) ->", r_today_0003.status_code)
+assert r_today_0003.status_code == 200
+assert "本葬の手配書PDFを開く".encode("utf-8") in r_today_0003.data
+assert f'src="/arrangement_image/{arr_pdf_id}"'.encode("utf-8") not in r_today_0003.data
+
+# 手配書登録画面の一覧でも、サムネイル画像ではなく「PDFを開く」リンクに
+# なっていることを確認
+r_manage_pdf_list = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "PDFを開く".encode("utf-8") in r_manage_pdf_list.data
+
+r_delete_pdf = client_arranger.post(f"/arrangement_delete/{arr_pdf_id}", follow_redirects=False)
+assert r_delete_pdf.status_code == 302
+with app.app_context():
+    assert db.session.get(Arrangement, arr_pdf_id) is None
 
 # --- 削除機能の確認 ---
 r_delete = client_arranger.post(f"/arrangement_delete/{arr_img_id}", follow_redirects=False)

@@ -117,6 +117,21 @@
         margin: 0 auto;
         border-radius: 4px;
       }
+      /* [追加] PDFファイルを開くリンク用のスタイル（画像サムネイルの代わり）。 */
+      .pdf-link {
+        display: inline-block;
+        white-space: nowrap;
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 12px;
+        padding: 5px 10px;
+        border-radius: 10px;
+        background: #077685;
+        text-decoration: none;
+      }
+      .pdf-link:hover {
+        background: #055c68;
+      }
       .delete-button {
         font-family: Arial;
         color: #ffffff;
@@ -172,8 +187,11 @@
               <td><input type="date" name="date" value="{{ today_str }}" required></td>
             </tr>
             <tr>
-              <td class="label">画像</td>
-              <td><input type="file" name="image" accept=".png,.jpg,.jpeg,.gif,.webp"></td>
+              <!-- [修正] 会館案内図などPDFで渡されることも多いため、
+                   画像に加えてPDFもアップロードできるようにした
+                   （フォーム項目名(name="image")はそのまま流用）。 -->
+              <td class="label">画像／PDF</td>
+              <td><input type="file" name="image" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf"></td>
             </tr>
             <tr>
               <td class="label">メモ</td>
@@ -198,7 +216,7 @@
                 <th>日付</th>
                 <th>対象ユーザー</th>
                 <th>本葬／通夜</th>
-                <th>画像</th>
+                <th>画像／PDF</th>
                 <th>メモ</th>
                 <th></th>
               </tr>
@@ -211,9 +229,14 @@
                 <td>{{ "本葬" if a.shift == "honso" else "通夜" }}</td>
                 <td>
                   {% if a.image_filename %}
-                  <a href="{{ url_for('arrangement_image', arrangement_id=a.id) }}" target="_blank">
-                    <img class="arrangement-thumb" src="{{ url_for('arrangement_image', arrangement_id=a.id) }}" alt="手配書画像">
-                  </a>
+                    {% if a.image_filename.lower().endswith('.pdf') %}
+                    <!-- [追加] PDFは<img>で表示できないため、別タブで開くリンクにする。 -->
+                    <a class="pdf-link" href="{{ url_for('arrangement_image', arrangement_id=a.id) }}" target="_blank">PDFを開く</a>
+                    {% else %}
+                    <a href="{{ url_for('arrangement_image', arrangement_id=a.id) }}" target="_blank">
+                      <img class="arrangement-thumb" src="{{ url_for('arrangement_image', arrangement_id=a.id) }}" alt="手配書画像">
+                    </a>
+                    {% endif %}
                   {% endif %}
                 </td>
                 <td class="memo-cell">{{ a.memo or "" }}</td>

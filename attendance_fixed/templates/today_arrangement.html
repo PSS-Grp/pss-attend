@@ -24,8 +24,9 @@
         margin-bottom: 24px;
         padding-bottom: 20px;
         /* [修正] ユーザー要望により、本葬と通夜の間の境界線をより
-           はっきり見えるよう、薄い点線から実線に変更した。 */
-        border-bottom: 2px solid #cccccc;
+           はっきり見えるよう、薄い点線から実線に変更（さらに要望により
+           2px→4pxへ太く）した。 */
+        border-bottom: 4px solid #cccccc;
       }
       .arrangement-block:last-of-type {
         border-bottom: none;
@@ -52,6 +53,24 @@
         margin: 0 auto 12px auto;
         border-radius: 6px;
         border: 1px solid #cfeaf0;
+      }
+      /* [追加] PDFファイルを開くリンク用のスタイル（画像の代わりに表示）。 */
+      .pdf-link {
+        display: block;
+        box-sizing: border-box;
+        width: 100%;
+        margin: 0 auto 12px auto;
+        text-align: center;
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 16px;
+        padding: 12px 0;
+        border-radius: 10px;
+        background: #077685;
+        text-decoration: none;
+      }
+      .pdf-link:hover {
+        background: #055c68;
       }
       .arrangement-memo {
         color: #333;
@@ -138,7 +157,11 @@
           <h2>本葬</h2>
           {% if honso_arrangement %}
             {% if honso_arrangement.image_filename %}
-            <img class="arrangement-image" src="{{ url_for('arrangement_image', arrangement_id=honso_arrangement.id) }}" alt="本葬の手配書画像">
+              {% if honso_arrangement.image_filename.lower().endswith('.pdf') %}
+              <a class="pdf-link" href="{{ url_for('arrangement_image', arrangement_id=honso_arrangement.id) }}" target="_blank">本葬の手配書PDFを開く</a>
+              {% else %}
+              <img class="arrangement-image" src="{{ url_for('arrangement_image', arrangement_id=honso_arrangement.id) }}" alt="本葬の手配書画像">
+              {% endif %}
             {% endif %}
             {% if honso_arrangement.memo %}
             <p class="arrangement-memo">{{ honso_arrangement.memo }}</p>
@@ -152,7 +175,11 @@
           <h2>通夜</h2>
           {% if tsuya_arrangement %}
             {% if tsuya_arrangement.image_filename %}
-            <img class="arrangement-image" src="{{ url_for('arrangement_image', arrangement_id=tsuya_arrangement.id) }}" alt="通夜の手配書画像">
+              {% if tsuya_arrangement.image_filename.lower().endswith('.pdf') %}
+              <a class="pdf-link" href="{{ url_for('arrangement_image', arrangement_id=tsuya_arrangement.id) }}" target="_blank">通夜の手配書PDFを開く</a>
+              {% else %}
+              <img class="arrangement-image" src="{{ url_for('arrangement_image', arrangement_id=tsuya_arrangement.id) }}" alt="通夜の手配書画像">
+              {% endif %}
             {% endif %}
             {% if tsuya_arrangement.memo %}
             <p class="arrangement-memo">{{ tsuya_arrangement.memo }}</p>

@@ -3,14 +3,19 @@
 #
 # ・手配者アカウント（models.Userのis_arranger=True）専用の登録画面
 #   (/arrangement_manage) で、一般ユーザー・本葬/通夜・日付を指定して
-#   画像とメモを登録する。
+#   画像（またはPDF）とメモを登録する。
 # ・一般ユーザーは、ログイン後の勤務選択画面(select.html)にある
 #   「本日の手配書」ボタンから /today_arrangement を開き、自分宛て・
-#   本日分の画像とメモだけを確認できる。
-# ・アップロードした画像は uploads/arrangements/ 配下に保存し、
+#   本日分の画像・PDFとメモだけを確認できる。
+# ・アップロードしたファイルは uploads/arrangements/ 配下に保存し、
 #   本人・手配者・管理者以外には見えないよう、専用のルート
 #   (/arrangement_image/<id>) 経由でアクセス制御した上で配信する
 #   （Flaskの静的配信(/static/...)は使わない）。
+#   [修正] 会館案内図など、PDFで渡されることも多いため、画像形式に
+#   加えてPDFもアップロードできるようにした。DBのカラム名・フォーム項目名
+#   （image_filename等）は既存のまま流用しており、「画像」という名前だが
+#   実際にはPDFも保存できる（テンプレート側では拡張子がpdfかどうかで
+#   表示方法を分けている）。
 #------------------------------------------------
 
 import os
@@ -29,7 +34,7 @@ from models import User, Arrangement
 from sqlalchemy.exc import IntegrityError
 
 
-ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf"}
 
 
 def _is_allowed_image(filename):
@@ -87,9 +92,9 @@ def arrangement_manage():
         if not target_user or shift not in ("honso", "tsuya") or not date_str:
             error_message = "対象ユーザー・本葬/通夜・日付を正しく指定してください。"
         elif not memo and not (image_file and image_file.filename):
-            error_message = "画像またはメモのいずれかを入力してください。"
+            error_message = "画像・PDF・メモのいずれかを入力してください。"
         elif image_file and image_file.filename and not _is_allowed_image(image_file.filename):
-            error_message = "画像ファイルの形式が対応していません（png/jpg/jpeg/gif/webpのみ）。"
+            error_message = "ファイルの形式が対応していません（png/jpg/jpeg/gif/webp/pdfのみ）。"
         else:
             image_filename = None
             if image_file and image_file.filename:
