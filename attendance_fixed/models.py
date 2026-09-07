@@ -180,8 +180,16 @@ class Arrangement(db.Model):
     shift = db.Column(db.String(10), nullable=False)
     # "YYYY-MM-DD" 形式の文字列（HTMLのdate inputからそのまま受け取る）
     date = db.Column(db.String(10), nullable=False)
-    # uploads/arrangements/ 配下に保存した画像ファイル名（未アップロードならNULL）
+    # アップロードされたファイルの名前（拡張子から画像かPDFかを判定するために
+    # 使う。未アップロードならNULL）。
     image_filename = db.Column(db.String(255), nullable=True)
+    # [修正/Neon対応] 以前はファイル本体をサーバーのディスク
+    # （uploads/arrangements/ 配下）に保存していたが、DBをNeon(PostgreSQL)に
+    # 移行するのに合わせて、ファイル本体もこのカラムにバイナリとして
+    # DB内に保存する方式に変更した。これにより、Render側にファイル保存用の
+    # 永続ディスクを別途用意する必要がなくなる（SQLiteではBLOB、
+    # PostgreSQLではbytea型として保存される）。
+    image_data = db.Column(db.LargeBinary, nullable=True)
     memo = db.Column(db.Text, nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, nullable=True)

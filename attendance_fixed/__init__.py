@@ -77,25 +77,46 @@ login_manager.init_app(app)
 login_manager.login_view = "login"
 
 #------------------------------------------------
-# DBの指定 sqlite
-# [修正] 相対パス "sqlite:///db/attendance.db" はカレントディレクトリに依存し、
-# どこから起動しても壊れないよう、このファイルの場所からの絶対パスに変更した。
+# DBの指定
+# [修正/Neon対応] 本番(Render)ではSQLiteをやめ、Neon（マネージドの
+# PostgreSQL）を使うようにした。環境変数 DATABASE_URL が設定されていれば
+# それを使い、未設定の場合はColab・ローカル実行時と同じくSQLiteに
+# フォールバックする（従来通りの挙動なので、Colabでの動作確認には
+# 何も影響しない）。
 #
-# [追加/Render対応] Render.com等の本番環境では、アプリのコード自体は
-# デプロイのたびに新しいディスク領域に展開され直すため、コードと同じ場所に
-# DBファイルを置くと再デプロイ・再起動のたびにデータが消えてしまう。
-# そのため、環境変数 ATTENDANCE_DATA_DIR が設定されていれば、DBファイルや
-# アップロード画像（下記 ARRANGEMENT_UPLOAD_DIR）をその場所（Renderの
-# 「Persistent Disk」のマウント先などを想定）に保存するようにした。
-# 未設定の場合は、Colabやローカル実行時と同じくアプリのコードと同じ
-# フォルダ（BASE_DIR）に保存する（従来通りの挙動）。
+# NeonやHerokuなどが発行する接続文字列は "postgres://..." 形式のことが
+# あるが、SQLAlchemy 1.4以降は "postgresql://..." でないと受け付けない
+# ため、先頭がpostgres://の場合はpostgresql://に読み替える。
 #------------------------------------------------
 
-DATA_DIR = os.environ.get("ATTENDANCE_DATA_DIR") or BASE_DIR
+_database_url = os.environ.get("DATABASE_URL")
 
-_db_dir = os.path.join(DATA_DIR, "db")
-os.makedirs(_db_dir, exist_ok=True)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(_db_dir, "attendance.db")
+if _database_url:
+    if _database_url.startswith("postgres://"):
+        _database_url = "postgresql://" + _database_url[len("postgres://"):]
+    app.config["SQLALCHEMY_DATABASE_URI"] = _database_url
+    # [追加/Neon対応] Neonはサーバーレスで、しばらく使われないと自動的に
+    # 接続がスリープ・切断されることがある。pool_pre_ping=Trueにより、
+    # SQLAlchemyがコネクションを使う直前に軽く生存確認を行い、切れていれば
+    # 自動的に張り直してくれるため、「久しぶりのアクセスでエラーになる」
+    # 事態を防げる。
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+    # DATA_DIRはSQLite利用時（下記else節）にしか使わないが、他のモジュールが
+    # 参照している可能性を考慮し、一応BASE_DIR基準の値を入れておく。
+    DATA_DIR = os.environ.get("ATTENDANCE_DATA_DIR") or BASE_DIR
+else:
+    # [修正] 相対パス "sqlite:///db/attendance.db" はカレントディレクトリに
+    # 依存し、どこから起動しても壊れないよう、このファイルの場所からの
+    # 絶対パスに変更した。
+    #
+    # [追加/Render対応] 環境変数 ATTENDANCE_DATA_DIR が設定されていれば、
+    # DBファイルをその場所（Renderの「Persistent Disk」のマウント先などを
+    # 想定）に保存する。未設定の場合は、Colabやローカル実行時と同じく
+    # アプリのコードと同じフォルダ（BASE_DIR）に保存する。
+    DATA_DIR = os.environ.get("ATTENDANCE_DATA_DIR") or BASE_DIR
+    _db_dir = os.path.join(DATA_DIR, "db")
+    os.makedirs(_db_dir, exist_ok=True)
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(_db_dir, "attendance.db")
 
 #------------------------------------------------
 # セッションタイムアウト時間
@@ -153,17 +174,16 @@ app.config['SECRET_KEY'] = _secret_key
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 #------------------------------------------------
-# [追加] 「本日の手配書」機能でアップロードする画像の保存先ディレクトリと、
-# アップロードサイズの上限（1ファイルあたりではなくリクエスト全体で10MB）。
-# 極端に大きなファイルが送られてサーバーのメモリ・ディスクを圧迫しないよう
-# 上限を設けている。
-# [追加/Render対応] DBファイルと同様、DATA_DIR（環境変数
-# ATTENDANCE_DATA_DIR、未設定ならBASE_DIR）配下に保存することで、
-# 本番環境の永続ディスクにアップロード画像も保持されるようにしている。
+# [追加] 「本日の手配書」機能でアップロードするファイル（画像・PDF）の
+# サイズ上限（1ファイルあたりではなくリクエスト全体で10MB）。
+# 極端に大きなファイルが送られてサーバーのメモリを圧迫しないよう上限を
+# 設けている。
+# [修正/Neon対応] 以前はここでファイルの保存先ディレクトリ
+# （ARRANGEMENT_UPLOAD_DIR）も定義していたが、ファイル本体をDB内
+# （models.Arrangement.image_data）に保存する方式に変更したため、
+# ディスク上の保存先ディレクトリは不要になった（詳細はarrangement.py参照）。
 #------------------------------------------------
 
-ARRANGEMENT_UPLOAD_DIR = os.path.join(DATA_DIR, "uploads", "arrangements")
-os.makedirs(ARRANGEMENT_UPLOAD_DIR, exist_ok=True)
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
 #------------------------------------------------

@@ -8,3 +8,6 @@ Werkzeug==3.1.8
 # [追加/Render対応] 本番環境ではFlask付属の開発用サーバーではなく、
 # gunicorn（本番向けWSGIサーバー）でアプリを起動する（wsgi.py参照）。
 gunicorn==23.0.0
+# [追加/Neon対応] DBをSQLiteからNeon(PostgreSQL)に切り替えるための
+# ドライバ。ソースからのビルドが不要な同梱バイナリ版(-binary)を使う。
+psycopg2-binary==2.9.10

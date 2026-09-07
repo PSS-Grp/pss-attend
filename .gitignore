@@ -1,13 +1,10 @@
 __pycache__/
 *.pyc
 
-# ローカル実行・動作確認用のSQLiteデータベースファイル。
-# 本番(Render)ではATTENDANCE_DATA_DIR配下（永続ディスク）に作られるため、
-# リポジトリ内のこのパスにはコミットしない。
+# ローカル実行・動作確認用のSQLiteデータベースファイル
+# （DATABASE_URL未設定時のフォールバックとして、Colab/ローカル実行時に
+# ATTENDANCE_DATA_DIR配下に作られるもの。本番(Render)ではNeon(PostgreSQL)を
+# 使うため、このファイルは通常のRender運用では作られない）。
 attendance_fixed/db/*.db
-
-# 手配書のアップロード画像（ローカル実行時にできるもの）。
-# 本番ではATTENDANCE_DATA_DIR配下（永続ディスク）に保存される。
-attendance_fixed/uploads/
 
 .env

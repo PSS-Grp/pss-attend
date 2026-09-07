@@ -7,26 +7,29 @@
 # ・一般ユーザーは、ログイン後の勤務選択画面(select.html)にある
 #   「本日の手配書」ボタンから /today_arrangement を開き、自分宛て・
 #   本日分の画像・PDFとメモだけを確認できる。
-# ・アップロードしたファイルは uploads/arrangements/ 配下に保存し、
-#   本人・手配者・管理者以外には見えないよう、専用のルート
-#   (/arrangement_image/<id>) 経由でアクセス制御した上で配信する
-#   （Flaskの静的配信(/static/...)は使わない）。
+# ・アップロードしたファイルは、本人・手配者・管理者以外には見えないよう、
+#   専用のルート(/arrangement_image/<id>) 経由でアクセス制御した上で
+#   配信する（Flaskの静的配信(/static/...)は使わない）。
 #   [修正] 会館案内図など、PDFで渡されることも多いため、画像形式に
 #   加えてPDFもアップロードできるようにした。DBのカラム名・フォーム項目名
 #   （image_filename等）は既存のまま流用しており、「画像」という名前だが
 #   実際にはPDFも保存できる（テンプレート側では拡張子がpdfかどうかで
 #   表示方法を分けている）。
+#   [修正/Neon対応] ファイル本体の保存先を、サーバーのディスク
+#   （uploads/arrangements/ 配下）からDB内（models.Arrangement.image_data、
+#   バイナリ型）に変更した。DBをSQLiteからNeon(PostgreSQL)へ移行するのに
+#   合わせて、Render側に永続ディスクを用意しなくても画像・PDFが
+#   再デプロイ・再起動で消えないようにするため。
 #------------------------------------------------
 
-import os
-import uuid
 import datetime
+import uuid
 from functools import wraps
 
-from __init__ import app, db, login_manager, get_today, ARRANGEMENT_UPLOAD_DIR
+from __init__ import app, db, login_manager, get_today
 
 from flask import (
-    request, render_template, redirect, url_for, send_from_directory, abort,
+    request, render_template, redirect, url_for, Response, abort,
 )
 from flask_login import login_required, current_user
 
@@ -36,6 +39,17 @@ from sqlalchemy.exc import IntegrityError
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf"}
 
+# [追加/Neon対応] DBに保存したバイナリを配信する際、拡張子から適切な
+# Content-Typeを判定するための対応表。
+_MIME_TYPES = {
+    "png": "image/png",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "webp": "image/webp",
+    "pdf": "application/pdf",
+}
+
 
 def _is_allowed_image(filename):
     if not filename or "." not in filename:
@@ -44,15 +58,11 @@ def _is_allowed_image(filename):
     return ext in ALLOWED_IMAGE_EXTENSIONS
 
 
-def _delete_image_file(filename):
-    if not filename:
-        return
-    path = os.path.join(ARRANGEMENT_UPLOAD_DIR, filename)
-    try:
-        if os.path.isfile(path):
-            os.remove(path)
-    except OSError:
-        pass
+def _guess_mimetype(filename):
+    if filename and "." in filename:
+        ext = filename.rsplit(".", 1)[1].lower()
+        return _MIME_TYPES.get(ext, "application/octet-stream")
+    return "application/octet-stream"
 
 
 #------------------------------------------------
@@ -97,10 +107,13 @@ def arrangement_manage():
             error_message = "ファイルの形式が対応していません（png/jpg/jpeg/gif/webp/pdfのみ）。"
         else:
             image_filename = None
+            image_data = None
             if image_file and image_file.filename:
                 ext = image_file.filename.rsplit(".", 1)[1].lower()
                 image_filename = "{}.{}".format(uuid.uuid4().hex, ext)
-                image_file.save(os.path.join(ARRANGEMENT_UPLOAD_DIR, image_filename))
+                # [修正/Neon対応] ファイルをディスクに保存する代わりに、
+                # 中身をそのままバイト列として読み込み、DBカラムに保存する。
+                image_data = image_file.read()
 
             now = datetime.datetime.now()
 
@@ -112,8 +125,8 @@ def arrangement_manage():
 
             if existing:
                 if image_filename:
-                    _delete_image_file(existing.image_filename)
                     existing.image_filename = image_filename
+                    existing.image_data = image_data
                 existing.memo = memo or None
                 existing.created_by_id = current_user.id
                 existing.updated_at = now
@@ -123,6 +136,7 @@ def arrangement_manage():
                     shift=shift,
                     date=date_str,
                     image_filename=image_filename,
+                    image_data=image_data,
                     memo=memo or None,
                     created_by_id=current_user.id,
                     created_at=now,
@@ -139,8 +153,6 @@ def arrangement_manage():
                 # エラー画面を出さずに登録済み一覧の画面に戻す
                 # （どちらか一方の内容が保存されている状態になる）。
                 db.session.rollback()
-                if image_filename:
-                    _delete_image_file(image_filename)
             return redirect(url_for('arrangement_manage'))
 
     # [追加] 対象ユーザーの選択肢は、一般従業員（管理者・手配者を除く）のみ。
@@ -170,7 +182,6 @@ def arrangement_manage():
 def arrangement_delete(arrangement_id):
     record = Arrangement.query.get(arrangement_id)
     if record:
-        _delete_image_file(record.image_filename)
         db.session.delete(record)
         db.session.commit()
     return redirect(url_for('arrangement_manage'))
@@ -178,15 +189,15 @@ def arrangement_delete(arrangement_id):
 
 #------------------------------------------------
 # 手配書の画像配信。
-# [追加] uploads/arrangements/ 配下は static フォルダではないため、
-# 通常はブラウザから直接アクセスできない。この専用ルートを経由し、
-# 本人・手配者・管理者のいずれかであることを確認した上でのみ配信する。
+# [追加] DBに保存したバイナリはstaticフォルダ経由では配信されないため、
+# この専用ルートを経由し、本人・手配者・管理者のいずれかであることを
+# 確認した上でのみ配信する。
 #------------------------------------------------
 @app.route('/arrangement_image/<int:arrangement_id>')
 @login_required
 def arrangement_image(arrangement_id):
     record = Arrangement.query.get(arrangement_id)
-    if not record or not record.image_filename:
+    if not record or not record.image_filename or not record.image_data:
         abort(404)
 
     allowed = (
@@ -197,7 +208,7 @@ def arrangement_image(arrangement_id):
     if not allowed:
         abort(403)
 
-    return send_from_directory(ARRANGEMENT_UPLOAD_DIR, record.image_filename)
+    return Response(record.image_data, mimetype=_guess_mimetype(record.image_filename))
 
 
 #------------------------------------------------
