@@ -5,28 +5,26 @@
 # 選択すると、このファイルの内容にもとづいてWebサービスが自動的に
 # 作成される（手動でビルド/起動コマンドなどを設定する必要はない）。
 #
-# ・勤怠記録(Time)・手配書(Arrangement)のデータと、手配書のアップロード
-#   画像は、SQLiteファイル＋Renderの永続ディスク(Persistent Disk)に
-#   保存する。永続ディスクは有料プラン(freeプラン以外)でのみ利用できる
-#   ため、planは有料の最小構成(0.5c-512mb)を指定している
-#   （ダッシュボードからいつでも上位プランに変更可能）。
-# ・永続ディスクは1サービスにつき1つ・1インスタンスのみからアクセス
-#   可能という制約があるため、このサービスは複数インスタンスへの
-#   自動スケールはできない（このアプリの利用規模であれば通常問題ない）。
+# [修正/Neon対応] 勤怠記録(Time)・手配書(Arrangement)のデータ、および
+# 手配書のアップロード画像・PDF（DB内にバイナリとして保存する方式に
+# 変更済み。arrangement.py・models.py参照）は、すべて環境変数
+# DATABASE_URL で指定するNeon（マネージドのPostgreSQL）に保存する。
+# これにより、以前使っていたRenderの永続ディスク(Persistent Disk)や、
+# それが必要とする有料プランが不要になったため、planはfreeプランを
+# 指定している（ダッシュボードからいつでも上位プランに変更可能）。
+# DATABASE_URLの値はこのファイルにはコミットせず、Renderのダッシュボード
+# （Environment）側で直接設定すること（sync: falseにより、Blueprint
+# 適用時にRenderから入力を求められる）。
 #------------------------------------------------
 
 services:
   - type: web
     runtime: python
     name: pss-attend
-    plan: 0.5c-512mb
+    plan: free
     buildCommand: "pip install -r attendance_fixed/requirements.txt"
     startCommand: "gunicorn wsgi:app --workers 2 --timeout 60 --bind 0.0.0.0:$PORT"
     healthCheckPath: /login
-    disk:
-      name: pss-attend-data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       # [追加] セッション暗号化用のシークレットキー。generateValue:trueに
       # より、初回デプロイ時にRenderが安全なランダム値を1度だけ生成し、
@@ -34,10 +32,12 @@ services:
       # （＝ログインセッションが再デプロイのたびに切れることはない）。
       - key: ATTENDANCE_SECRET_KEY
         generateValue: true
-      # [追加] DBファイル・アップロード画像の保存先を、上記の永続ディスクの
-      # マウント先に向ける（__init__.py参照）。
-      - key: ATTENDANCE_DATA_DIR
-        value: /var/data
+      # [追加/Neon対応] NeonダッシュボードでコピーできるConnection string
+      # （postgresql://ユーザー名:パスワード@ホスト/データベース名?sslmode=require
+      # の形式）をそのまま設定する。sync: falseのため値はgitリポジトリには
+      # 保存されず、Renderのダッシュボード（Environment）側で入力・管理する。
+      - key: DATABASE_URL
+        sync: false
       # Renderが自動的に PYTHON_VERSION より優先して .python-version を
       # 参照するため、ここでの指定は不要（リポジトリ直下の .python-version
       # ファイルを参照）。
