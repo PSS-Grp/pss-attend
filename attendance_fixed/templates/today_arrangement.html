@@ -20,13 +20,6 @@
         width: 640px;
         max-width: 95%;
       }
-      /* [修正] ユーザー要望により、この画面（本日の手配書）のみ、
-         タイトル下の日付の下線をオレンジ色にした
-         （style.cssの#frame .frame-titleの共通スタイルを、
-         このページに限りここで上書きしている）。 */
-      #frame.wide .frame-title {
-        border-bottom-color: #e67e22;
-      }
       .arrangement-block {
         margin-bottom: 24px;
         padding-bottom: 20px;
@@ -34,6 +27,11 @@
            はっきり見えるよう、薄い点線から実線に変更（2px→4pxへ太く、
            さらに色を灰色からネイビーに変更）した。 */
         border-bottom: 4px solid #1f3864;
+      }
+      /* [追加] ユーザー要望により、本葬ブロックの上にオレンジ色の
+         境界線（太さ0.4px）を新たに追加した。 */
+      .arrangement-block.honso {
+        border-top: 0.4px solid #e67e22;
       }
       .arrangement-block:last-of-type {
         border-bottom: none;
