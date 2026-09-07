@@ -22,17 +22,29 @@
       }
       .arrangement-block {
         margin-bottom: 24px;
-        padding-bottom: 18px;
-        border-bottom: 1px dashed #cfeaf0;
+        padding-bottom: 20px;
+        /* [修正] ユーザー要望により、本葬と通夜の間の境界線をより
+           はっきり見えるよう、薄い点線から実線に変更した。 */
+        border-bottom: 2px solid #cccccc;
       }
       .arrangement-block:last-of-type {
         border-bottom: none;
+        padding-bottom: 0;
       }
       .arrangement-block h2 {
-        color: #4eb4c2;
-        font-size: 18px;
+        font-family: Arial;
+        font-size: 26px;
+        font-weight: bold;
         text-align: center;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
+      }
+      /* [修正] ユーザー要望により、本葬は見出しの文字を大きくオレンジ色に、
+         通夜はネイビー色にして見分けやすくした。 */
+      .arrangement-block.honso h2 {
+        color: #e67e22;
+      }
+      .arrangement-block.tsuya h2 {
+        color: #1f3864;
       }
       .arrangement-image {
         display: block;
@@ -122,7 +134,7 @@
         <a class="today-reset" href="{{ url_for('today_arrangement') }}">本日に戻る</a>
         {% endif %}
 
-        <div class="arrangement-block">
+        <div class="arrangement-block honso">
           <h2>本葬</h2>
           {% if honso_arrangement %}
             {% if honso_arrangement.image_filename %}
@@ -136,7 +148,7 @@
           {% endif %}
         </div>
 
-        <div class="arrangement-block">
+        <div class="arrangement-block tsuya">
           <h2>通夜</h2>
           {% if tsuya_arrangement %}
             {% if tsuya_arrangement.image_filename %}
