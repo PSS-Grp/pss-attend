@@ -248,6 +248,109 @@ r12 = client_admin.get("/admin/place/", follow_redirects=False)
 print("GET /admin/place/ (管理者でログイン済み) ->", r12.status_code)
 assert r12.status_code == 200
 
+# --- [追加] 管理画面(/admin/user/)からのパスワードのハッシュ化を確認 ---
+# 以前は管理画面のUser編集/新規作成フォームがpasswordカラムをそのまま
+# （平文入力→平文保存）扱っていたため、管理画面経由で作成・変更した
+# アカウントは平文パスワードのまま保存されてログインできなくなる不具合が
+# あった。admin.pyのUserModelView（_AdminPasswordField・on_model_change）で
+# 修正済みであることを確認する。
+from werkzeug.security import check_password_hash as _check_password_hash  # noqa: E402
+
+# 新規作成: 入力した平文がハッシュ化されて保存され、そのパスワードで
+# ログインできることを確認
+r_admin_user_new = client_admin.post(
+    "/admin/user/new/",
+    data={
+        "username": "admin_pw_test",
+        "number": "0090",
+        "password": "adminpw1",
+        "is_admin": "",
+        "is_arranger": "",
+    },
+    follow_redirects=False,
+)
+print("POST /admin/user/new/ (パスワード付き新規作成) ->", r_admin_user_new.status_code)
+assert r_admin_user_new.status_code == 302
+
+with app.app_context():
+    pw_test_user = User.query.filter_by(number="0090").first()
+    assert pw_test_user is not None
+    assert pw_test_user.password != "adminpw1"  # 平文のまま保存されていない
+    assert _check_password_hash(pw_test_user.password, "adminpw1")
+    pw_test_user_id = pw_test_user.id
+    original_hash = pw_test_user.password
+
+client_pw_test = app.test_client()
+r_pw_test_login = client_pw_test.post(
+    "/login", data={"login": "ログイン", "number": "0090", "password": "adminpw1"}, follow_redirects=False
+)
+print("POST /login (管理画面で作成したアカウント) ->", r_pw_test_login.status_code, r_pw_test_login.headers.get("Location"))
+assert r_pw_test_login.status_code == 302 and r_pw_test_login.headers.get("Location") == "/judge"
+
+# 編集: パスワード欄を空欄のまま他の項目だけ変更 -> 既存のパスワードを維持する
+r_admin_user_edit_blank = client_admin.post(
+    f"/admin/user/edit/?id={pw_test_user_id}",
+    data={"username": "admin_pw_test2", "number": "0090", "password": "", "is_admin": "", "is_arranger": ""},
+    follow_redirects=False,
+)
+print("POST /admin/user/edit/ (パスワード空欄で編集) ->", r_admin_user_edit_blank.status_code)
+assert r_admin_user_edit_blank.status_code == 302
+
+with app.app_context():
+    pw_test_user = db.session.get(User, pw_test_user_id)
+    assert pw_test_user.username == "admin_pw_test2"
+    assert pw_test_user.password == original_hash  # ハッシュが維持されている
+
+client_pw_test2 = app.test_client()
+r_pw_test_login2 = client_pw_test2.post(
+    "/login", data={"login": "ログイン", "number": "0090", "password": "adminpw1"}, follow_redirects=False
+)
+print("POST /login (空欄編集後も旧パスワードでログイン) ->", r_pw_test_login2.status_code)
+assert r_pw_test_login2.status_code == 302 and r_pw_test_login2.headers.get("Location") == "/judge"
+
+# 編集: パスワードを新しい値に変更 -> ハッシュが変わり、新パスワードでのみログインできる
+r_admin_user_edit_new = client_admin.post(
+    f"/admin/user/edit/?id={pw_test_user_id}",
+    data={"username": "admin_pw_test2", "number": "0090", "password": "adminpw2", "is_admin": "", "is_arranger": ""},
+    follow_redirects=False,
+)
+print("POST /admin/user/edit/ (新しいパスワードで編集) ->", r_admin_user_edit_new.status_code)
+assert r_admin_user_edit_new.status_code == 302
+
+with app.app_context():
+    pw_test_user = db.session.get(User, pw_test_user_id)
+    assert _check_password_hash(pw_test_user.password, "adminpw2")
+    assert not _check_password_hash(pw_test_user.password, "adminpw1")
+
+client_pw_test3 = app.test_client()
+r_pw_test_login3 = client_pw_test3.post(
+    "/login", data={"login": "ログイン", "number": "0090", "password": "adminpw2"}, follow_redirects=False
+)
+print("POST /login (新パスワードでログイン) ->", r_pw_test_login3.status_code)
+assert r_pw_test_login3.status_code == 302 and r_pw_test_login3.headers.get("Location") == "/judge"
+
+r_pw_test_login_stale = client.post(
+    "/login", data={"login": "ログイン", "number": "0090", "password": "adminpw1"}, follow_redirects=False
+)
+print("POST /login (変更後は旧パスワードでログイン失敗) ->", r_pw_test_login_stale.status_code)
+assert r_pw_test_login_stale.status_code == 200  # ログイン失敗時はlogin.html再表示（302にならない）
+
+# 新規作成: パスワード未入力は拒否され、アカウントが作られないことを確認
+with app.app_context():
+    _user_count_before = User.query.count()
+
+r_admin_user_new_blank = client_admin.post(
+    "/admin/user/new/",
+    data={"username": "admin_pw_test_blank", "number": "0091", "password": "", "is_admin": "", "is_arranger": ""},
+    follow_redirects=False,
+)
+print("POST /admin/user/new/ (パスワード未入力) ->", r_admin_user_new_blank.status_code)
+assert r_admin_user_new_blank.status_code == 200  # 作成失敗時はフォーム画面を再表示（302にならない）
+
+with app.app_context():
+    assert User.query.count() == _user_count_before
+    assert User.query.filter_by(number="0091").first() is None
+
 # --- Time(勤怠記録)のユーザーごとCSV出力 ---
 
 # 0002用の勤怠レコードも用意しておく（0001は先のPOST /honso_stampで既に作成済み）

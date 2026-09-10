@@ -10,6 +10,24 @@ from flask_login import current_user
 from models import User, Time, Place, Arrangement
 # from models import User, Time ,LoginForm
 
+#------------------------------------------------
+# [追加] 管理画面(/admin/user/)からユーザーを新規作成・編集する際、
+# パスワード欄に入力した平文を自動的にハッシュ化して保存するための部品。
+#------------------------------------------------
+from sqlalchemy import inspect
+from werkzeug.security import generate_password_hash
+from wtforms.fields import PasswordField
+from wtforms.validators import ValidationError, InputRequired
+
+
+class _AdminPasswordField(PasswordField):
+    # [追加] 編集画面を開いたときに、DBに保存済みのハッシュ値が
+    # フォームの初期値として表示（＝画面上に見えてしまう、うっかり
+    # そのまま保存すると再ハッシュ化されて壊れる、等）されないよう、
+    # 常に空欄から始まるようにする。
+    def process_data(self, value):
+        self.data = ""
+
 
 #import models
 
@@ -61,6 +79,84 @@ class SecureAdminIndexView(AdminAuthMixin, AdminIndexView):
 
 class SecureModelView(AdminAuthMixin, ModelView):
     pass
+
+
+#------------------------------------------------
+# [追加] Userテーブル専用の管理画面。
+#
+# 以前はUserもただのSecureModelViewだったため、/admin/user/の新規作成・
+# 編集フォームに「password」列がそのまま（平文入力→平文保存）表示されて
+# いた。実際のログイン処理(index.pyのlogin())はwerkzeugの
+# check_password_hash()でハッシュ値と照合する作りのため、管理画面経由で
+# 作成・変更したアカウントは、平文のまま保存されてしまいログインできない
+# という不具合があった。
+#
+# ここでは、
+#   ・一覧画面(column_list)からはpassword列そのもの（ハッシュ値）を隠す。
+#   ・フォームのpassword欄は _AdminPasswordField にして、常に空欄で
+#     表示する（既存のハッシュ値を画面に表示しない）。
+#   ・保存直前(on_model_change)に、入力された平文をgenerate_password_hash()
+#     でハッシュ化してから実際のモデルにセットする。
+#   ・編集時にpassword欄を空欄のまま保存した場合は「変更しない」ものとして
+#     扱い、既存のパスワード（ハッシュ値）をそのまま維持する。
+#   ・新規作成なのにpassword欄が空欄の場合はエラーにする。
+#------------------------------------------------
+class UserModelView(SecureModelView):
+    column_list = ["id", "username", "number", "is_admin", "is_arranger"]
+    form_columns = ["username", "number", "password", "is_admin", "is_arranger"]
+    form_overrides = {"password": _AdminPasswordField}
+    form_widget_args = {
+        "password": {
+            "placeholder": "新規作成時は必ず入力／編集時は変更する場合のみ入力（空欄なら変更しません）",
+        },
+    }
+    column_searchable_list = ["username", "number"]
+
+    # [追加] passwordカラムはnullable=Falseのため、Flask-Adminのフォーム
+    # 自動生成が既存のvalidatorsに関係なく無条件でInputRequired（必須）を
+    # 追加してしまう（form_args={"validators": []}のような指定では
+    # 打ち消せなかった。動作確認の過程で発覚）。そのままだと、編集画面で
+    # パスワード欄を空欄のまま（＝変更しないつもりで）保存しようとしても
+    # 「Failed to save record.」となり保存自体ができなくなってしまう。
+    # scaffold_form()でフォームクラスを組み立てた直後に、password欄に
+    # 付与されたInputRequiredだけを取り除き、常に任意項目にしている。
+    # 「新規作成時は必須・編集時は空欄なら変更しない」という制御は
+    # 下のon_model_change側で行う。
+    def scaffold_form(self):
+        form_class = super().scaffold_form()
+        password_field = getattr(form_class, "password", None)
+        if password_field is not None and hasattr(password_field, "kwargs"):
+            password_field.kwargs["validators"] = [
+                v for v in password_field.kwargs.get("validators", [])
+                if not isinstance(v, InputRequired)
+            ]
+        return form_class
+
+    def on_model_change(self, form, model, is_created):
+        submitted_password = form.password.data
+
+        if submitted_password:
+            # 入力された平文パスワードをハッシュ化してから保存する。
+            model.password = generate_password_hash(submitted_password)
+        elif is_created:
+            # 新規作成時にパスワード未入力はエラーにする
+            # （空欄のまま保存すると、ログインできないアカウントができてしまうため）。
+            # [補足] passwordカラムはnullable=Falseのため、実際には
+            # Flask-Adminがフォームに自動付与する「必須」バリデーションの方が
+            # 先に働き、この時点まで処理が来る前に「Failed to create record.」
+            # という汎用エラーで新規作成が止まる（動作確認済み）。
+            # ここでの例外は、その自動バリデーションが何らかの理由で
+            # 効かなかった場合の保険。
+            raise ValidationError("新規作成時はパスワードを入力してください。")
+        else:
+            # 編集時に空欄のまま保存された場合は「変更しない」として扱い、
+            # DBに保存されている元のパスワード（ハッシュ値）を維持する。
+            # （このタイミングでは既にform.populate_obj()によりmodel.passwordに
+            #   空文字が入ってしまっているため、SQLAlchemyの変更履歴から
+            #   変更前の値を取り出して戻す。）
+            history = inspect(model).attrs.password.history
+            if history.deleted:
+                model.password = history.deleted[0]
 
 
 #------------------------------------------------
@@ -117,7 +213,7 @@ admin = Admin(
     index_view=SecureAdminIndexView(),
 )
 
-admin.add_view(SecureModelView(User, db.session))
+admin.add_view(UserModelView(User, db.session))
 admin.add_view(TimeModelView(Time, db.session))
 # [追加] 会館名(Place)も管理画面から追加・編集できるようにする。
 # Placeのuser_idを指定すると、その従業員だけに表示される会館になる
