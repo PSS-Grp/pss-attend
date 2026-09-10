@@ -397,6 +397,27 @@ def _format_break_minutes(minutes):
     return "{}分".format(minutes)
 
 
+#------------------------------------------------
+# [追加] 実働時間（分）と時給から支給額（円）を計算するヘルパー。
+# 実働時間が計算できない（出退勤どちらかが未入力）場合はNoneを返す。
+# 端数（1円未満）は四捨五入する。
+#------------------------------------------------
+def _calc_amount(work_minutes, wage):
+    if work_minutes is None:
+        return None
+    return int(round(wage * work_minutes / 60))
+
+
+#------------------------------------------------
+# [追加] 支給額（円）を勤怠一覧の表に表示するための文字列に変換する。
+# 実働時間が計算できない場合（_calc_amountがNoneを返した場合）は"-"を返す。
+#------------------------------------------------
+def _format_amount(amount):
+    if amount is None:
+        return "-"
+    return "{:,}円".format(amount)
+
+
 @app.route('/attendance_list')
 @login_required                                  #ログイン必須にしたい関数の前に記述する
 
@@ -439,16 +460,30 @@ def attendance_list():
     # [追加] 「手当」欄の「休憩」で入力された休憩時間（break_minutes1/2）は、
     # 実働時間の計算時にそれぞれ差し引く。休憩時間そのものも表示用に
     # 一覧の列へ含める。
+    # [追加] ログイン中ユーザーの本葬時給・通夜時給(User.honso_wage/tsuya_wage)を
+    # 使って、本葬・通夜それぞれの実働時間から支給額（円）を計算し、行データと
+    # 月合計に含める。
+    honso_wage = current_user.honso_wage
+    tsuya_wage = current_user.tsuya_wage
+
     honso_total_minutes = 0
     tsuya_total_minutes = 0
+    honso_total_amount = 0
+    tsuya_total_amount = 0
     record_rows = []
     for r in records:
         honso_minutes = _calc_work_minutes(r.start1, r.end1, break_minutes=r.break_minutes1)
         tsuya_minutes = _calc_work_minutes(r.start2, r.end2, break_minutes=r.break_minutes2)
+        honso_amount = _calc_amount(honso_minutes, honso_wage)
+        tsuya_amount = _calc_amount(tsuya_minutes, tsuya_wage)
         if honso_minutes:
             honso_total_minutes += honso_minutes
         if tsuya_minutes:
             tsuya_total_minutes += tsuya_minutes
+        if honso_amount:
+            honso_total_amount += honso_amount
+        if tsuya_amount:
+            tsuya_total_amount += tsuya_amount
         record_rows.append({
             "date": r.date,
             "place1": r.place1,
@@ -456,16 +491,22 @@ def attendance_list():
             "end1": r.end1,
             "honso_break": _format_break_minutes(r.break_minutes1),
             "honso_duration": _format_work_minutes(honso_minutes),
+            "honso_amount": _format_amount(honso_amount),
             "place2": r.place2,
             "start2": r.start2,
             "end2": r.end2,
             "tsuya_break": _format_break_minutes(r.break_minutes2),
             "tsuya_duration": _format_work_minutes(tsuya_minutes),
+            "tsuya_amount": _format_amount(tsuya_amount),
         })
 
     honso_total_display = _format_work_minutes(honso_total_minutes)
     tsuya_total_display = _format_work_minutes(tsuya_total_minutes)
     combined_total_display = _format_work_minutes(honso_total_minutes + tsuya_total_minutes)
+
+    honso_total_amount_display = _format_amount(honso_total_amount)
+    tsuya_total_amount_display = _format_amount(tsuya_total_amount)
+    combined_total_amount_display = _format_amount(honso_total_amount + tsuya_total_amount)
 
     # [追加] 画面上の「前月」「次月」リンク用に、前後の年月を計算する。
     if month == 1:
@@ -498,6 +539,9 @@ def attendance_list():
                             honso_total_display=honso_total_display,
                             tsuya_total_display=tsuya_total_display,
                             combined_total_display=combined_total_display,
+                            honso_total_amount_display=honso_total_amount_display,
+                            tsuya_total_amount_display=tsuya_total_amount_display,
+                            combined_total_amount_display=combined_total_amount_display,
                             prev_year=prev_year,
                             prev_month=prev_month,
                             next_year=next_year,

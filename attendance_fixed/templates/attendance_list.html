@@ -187,8 +187,8 @@
           <thead>
             <tr>
               <th rowspan="2">日付</th>
-              <th colspan="5" class="section-label">本葬</th>
-              <th colspan="5" class="section-label">通夜</th>
+              <th colspan="6" class="section-label">本葬</th>
+              <th colspan="6" class="section-label">通夜</th>
             </tr>
             <tr>
               <th>会館名</th>
@@ -198,11 +198,15 @@
                    実働時間は、出勤〜退勤の時間からこの休憩時間を差し引いた値。 -->
               <th>休憩</th>
               <th>実働時間</th>
+              <!-- [追加] 本葬時給(User.honso_wage)×実働時間から算出した支給額の列。 -->
+              <th>支給額</th>
               <th>会館名</th>
               <th>出勤</th>
               <th>退勤</th>
               <th>休憩</th>
               <th>実働時間</th>
+              <!-- [追加] 通夜時給(User.tsuya_wage)×実働時間から算出した支給額の列。 -->
+              <th>支給額</th>
             </tr>
           </thead>
           <tbody>
@@ -214,11 +218,13 @@
               <td>{{ r.end1 or "" }}</td>
               <td>{{ r.honso_break }}</td>
               <td>{{ r.honso_duration }}</td>
+              <td>{{ r.honso_amount }}</td>
               <td>{{ r.place2 or "" }}</td>
               <td>{{ r.start2 or "" }}</td>
               <td>{{ r.end2 or "" }}</td>
               <td>{{ r.tsuya_break }}</td>
               <td>{{ r.tsuya_duration }}</td>
+              <td>{{ r.tsuya_amount }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -240,6 +246,23 @@
           <div class="monthly-summary-row total">
             <span>本葬＋通夜 合計</span>
             <span>{{ combined_total_display }}</span>
+          </div>
+        </div>
+
+        <!-- [追加] 本葬時給・通夜時給から算出した、表示中の月の支給額合計。 -->
+        <div class="monthly-summary">
+          <p class="monthly-summary-title">{{year}}年{{month}}月の支給額</p>
+          <div class="monthly-summary-row">
+            <span>本葬 支給額</span>
+            <span>{{ honso_total_amount_display }}</span>
+          </div>
+          <div class="monthly-summary-row">
+            <span>通夜 支給額</span>
+            <span>{{ tsuya_total_amount_display }}</span>
+          </div>
+          <div class="monthly-summary-row total">
+            <span>本葬＋通夜 支給額合計</span>
+            <span>{{ combined_total_amount_display }}</span>
           </div>
         </div>
         {% else %}
