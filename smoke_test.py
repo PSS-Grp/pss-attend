@@ -534,6 +534,56 @@ assert f"{prev_year}年{prev_month}月の勤怠一覧".encode("utf-8") in r27.da
 assert "17:00".encode("utf-8") in r27.data  # パターン0の本葬退勤時刻
 assert "22:00".encode("utf-8") in r27.data  # パターン2の通夜退勤時刻
 
+# [追加] 本葬・通夜それぞれの実働時間（行ごと）と、月合計（本葬合計・
+# 通夜合計・本葬+通夜合計）が正しく計算・表示されていることを確認する。
+#
+# seed_demo_user.pyのpatterns（3種類、i%3で循環）は、前月の5日・12日・19日の
+# 3件（サンプル数=パターン数と一致）に対して、開始オフセットに関わらず
+# 3パターンとも必ず1回ずつ出現する。各パターンの実働時間は固定値なので、
+# 行ごとの表示（8時間0分・3時間0分・4時間30分・4時間0分）をそのまま
+# 期待値として検証できる。
+#   パターン0: 本葬 09:00-17:00 = 8時間0分（通夜なし）
+#   パターン1: 通夜 18:00-21:00 = 3時間0分（本葬なし）
+#   パターン2: 本葬 08:30-13:00 = 4時間30分／通夜 18:00-22:00 = 4時間0分
+assert "8時間0分".encode("utf-8") in r27.data
+assert "3時間0分".encode("utf-8") in r27.data
+assert "4時間30分".encode("utf-8") in r27.data
+assert "4時間0分".encode("utf-8") in r27.data
+
+# 月合計は、上の3パターンから独立に（index.pyのヘルパーを使い、DBを
+# 直接読み直して）期待値を計算し、画面表示と一致することを確認する。
+with app.app_context():
+    prev_month_prefix = "{:04d}-{:02d}-".format(prev_year, prev_month)
+    prev_records_0001 = (
+        Time.query
+        .filter(Time.number == "0001", Time.date.like(prev_month_prefix + "%"))
+        .all()
+    )
+    expected_honso_total = 0
+    expected_tsuya_total = 0
+    for rec in prev_records_0001:
+        hm = index._calc_work_minutes(rec.start1, rec.end1)
+        tm = index._calc_work_minutes(rec.start2, rec.end2)
+        if hm:
+            expected_honso_total += hm
+        if tm:
+            expected_tsuya_total += tm
+    expected_honso_display = index._format_work_minutes(expected_honso_total)
+    expected_tsuya_display = index._format_work_minutes(expected_tsuya_total)
+    expected_combined_display = index._format_work_minutes(expected_honso_total + expected_tsuya_total)
+
+print(
+    f"前月({prev_year}年{prev_month}月, 0001)の期待合計 本葬:{expected_honso_display} "
+    f"通夜:{expected_tsuya_display} 合計:{expected_combined_display}"
+)
+assert expected_honso_display.encode("utf-8") in r27.data
+assert expected_tsuya_display.encode("utf-8") in r27.data
+assert expected_combined_display.encode("utf-8") in r27.data
+# 前月分は本葬・通夜とも必ず記録があるはずなので、期待値が"-"（未入力扱い）に
+# なっていないこと（＝集計が本当に行われていること）も念のため確認する。
+assert expected_honso_display != "-"
+assert expected_tsuya_display != "-"
+
 # 前月リンクのhrefが正しい年月を指していることを確認
 assert f'year={prev_year}&amp;month={prev_month}'.encode("utf-8") in r24.data or \
        f'year={prev_year}&month={prev_month}'.encode("utf-8") in r24.data

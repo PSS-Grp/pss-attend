@@ -338,6 +338,45 @@ def judge():
 # date型デフォルトアダプタによる）、"YYYY-MM-" で始まる行を月の絞り込みに
 # 使っている。
 #------------------------------------------------
+#------------------------------------------------
+# [追加] 出勤時刻・退勤時刻（"HH:MM"形式の文字列）から実働時間（分）を
+# 計算するヘルパー。勤怠一覧画面で本葬・通夜それぞれの実働時間や
+# 月合計を表示するために使う。
+#
+# 出勤・退勤のどちらかが未入力（None・空文字・"--:--"）だったり、
+# "HH:MM"形式として解釈できない値だった場合はNone（計算不可）を返す。
+# 退勤時刻が出勤時刻より前になっているケース（通夜の勤務が深夜0時を
+# またぐ場合など）は、日をまたいだものとして退勤時刻に24時間分を
+# 加算してから計算する。
+#------------------------------------------------
+def _calc_work_minutes(start_str, end_str):
+    if not start_str or not end_str:
+        return None
+    if start_str == "--:--" or end_str == "--:--":
+        return None
+    try:
+        start_h, start_m = (int(x) for x in start_str.split(":"))
+        end_h, end_m = (int(x) for x in end_str.split(":"))
+    except (ValueError, AttributeError):
+        return None
+    start_total = start_h * 60 + start_m
+    end_total = end_h * 60 + end_m
+    if end_total < start_total:
+        end_total += 24 * 60
+    return end_total - start_total
+
+
+#------------------------------------------------
+# [追加] 分数を「◯時間◯分」の表示用文字列に変換するヘルパー。
+# 実働時間が計算できない（出退勤どちらかが未入力）場合は"-"を返す。
+#------------------------------------------------
+def _format_work_minutes(minutes):
+    if minutes is None:
+        return "-"
+    hours, mins = divmod(minutes, 60)
+    return "{}時間{}分".format(hours, mins)
+
+
 @app.route('/attendance_list')
 @login_required                                  #ログイン必須にしたい関数の前に記述する
 
@@ -374,6 +413,35 @@ def attendance_list():
         .all()
     )
 
+    # [追加] 本葬(start1/end1)・通夜(start2/end2)それぞれの実働時間を計算し、
+    # テンプレートに渡す行データ(record_rows)に含める。あわせて、月全体の
+    # 本葬合計・通夜合計・（本葬＋通夜の）合計時間も集計する。
+    honso_total_minutes = 0
+    tsuya_total_minutes = 0
+    record_rows = []
+    for r in records:
+        honso_minutes = _calc_work_minutes(r.start1, r.end1)
+        tsuya_minutes = _calc_work_minutes(r.start2, r.end2)
+        if honso_minutes:
+            honso_total_minutes += honso_minutes
+        if tsuya_minutes:
+            tsuya_total_minutes += tsuya_minutes
+        record_rows.append({
+            "date": r.date,
+            "place1": r.place1,
+            "start1": r.start1,
+            "end1": r.end1,
+            "honso_duration": _format_work_minutes(honso_minutes),
+            "place2": r.place2,
+            "start2": r.start2,
+            "end2": r.end2,
+            "tsuya_duration": _format_work_minutes(tsuya_minutes),
+        })
+
+    honso_total_display = _format_work_minutes(honso_total_minutes)
+    tsuya_total_display = _format_work_minutes(tsuya_total_minutes)
+    combined_total_display = _format_work_minutes(honso_total_minutes + tsuya_total_minutes)
+
     # [追加] 画面上の「前月」「次月」リンク用に、前後の年月を計算する。
     if month == 1:
         prev_year, prev_month = year - 1, 12
@@ -401,7 +469,10 @@ def attendance_list():
                             number=number,
                             year=year,
                             month=month,
-                            records=records,
+                            records=record_rows,
+                            honso_total_display=honso_total_display,
+                            tsuya_total_display=tsuya_total_display,
+                            combined_total_display=combined_total_display,
                             prev_year=prev_year,
                             prev_month=prev_month,
                             next_year=next_year,
