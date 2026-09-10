@@ -75,21 +75,33 @@ def honso_stamp():
 
     start1 = "--:--"
     end1 = "--:--"
+    # [追加] 「手当」欄の先頭に追加した「休憩」チェックボックスと、
+    # チェック時に入力する休憩時間（分）の初期値。
+    break1=None
+    break_minutes1=None
     leader1='off'
-    subleader1=None 
-    teach1=None 
-    wait1=None 
-    designated1=None 
-    distant1=None 
-    special1=None 
-    highway1=None 
-    express1=None 
-    other1=None 
+    subleader1=None
+    teach1=None
+    wait1=None
+    designated1=None
+    distant1=None
+    special1=None
+    highway1=None
+    express1=None
+    other1=None
 
     if request.method =='POST':                  # POSTがリクエストされた場合
        place1 = request.form.get('place1')       # place1をから入力値を取得
        start1 = request.form.get('start1')
        end1 = request.form.get('end1')
+       break1 = request.form.get('break1')
+       # [追加] 休憩時間（分）は数値として保存する。未入力・不正な値の
+       # 場合はNoneのまま（＝休憩なし扱い）にする。
+       break_minutes1_raw = request.form.get('break_minutes1')
+       try:
+          break_minutes1 = int(break_minutes1_raw) if break_minutes1_raw else None
+       except ValueError:
+          break_minutes1 = None
        leader1 = request.form.get('leader1')
        subleader1 = request.form.get('subleader1')
        teach1 = request.form.get('teach1')
@@ -107,6 +119,8 @@ def honso_stamp():
        time.place1=place1
        time.start1=start1
        time.end1=end1
+       time.break1=break1
+       time.break_minutes1=break_minutes1
        time.leader1=leader1
        time.subleader1=subleader1
        time.teach1=teach1
@@ -151,8 +165,10 @@ def honso_stamp():
                             today=today,
                             places=get_places_for_current_user(),
                             start1=start1,
-                            end1=end1, 
-                            leader1=leader1, 
+                            end1=end1,
+                            break1=break1,
+                            break_minutes1=break_minutes1,
+                            leader1=leader1,
                             subleader1=subleader1, 
                             teach1=teach1, 
                             wait1=wait1, 
@@ -195,6 +211,9 @@ def honso_modify():
     place1 = record.place1 if record.place1 else "未入力"
     start1 = record.start1
     end1 = "--:--"
+    # [追加] 「休憩」チェックボックスと休憩時間（分）の初期表示値。
+    break1 = "checked" if record.break1 else "off"
+    break_minutes1 = record.break_minutes1 if record.break_minutes1 else ""
     leader1 = "checked" if record.leader1 else "off"
     subleader1 = "checked" if record.subleader1 else "off"
     teach1 = "checked" if record.teach1 else "off"
@@ -211,6 +230,14 @@ def honso_modify():
     if request.method == 'POST':                  # リクエストがPOSTの場合
 
        end1 = request.form.get('end1')
+       break1 = request.form.get('break1')
+       # [追加] 休憩時間（分）を数値として保存する。未入力・不正な値の
+       # 場合はNoneのまま（＝休憩なし扱い）にする。
+       break_minutes1_raw = request.form.get('break_minutes1')
+       try:
+          break_minutes1 = int(break_minutes1_raw) if break_minutes1_raw else None
+       except ValueError:
+          break_minutes1 = None
        leader1 = request.form.get('leader1')
        subleader1 = request.form.get('subleader1')
        teach1 = request.form.get('teach1')
@@ -237,6 +264,8 @@ def honso_modify():
        modify_record.date=today
        modify_record.number=number
        modify_record.end1=end1
+       modify_record.break1=break1
+       modify_record.break_minutes1=break_minutes1
        modify_record.leader1=leader1
        modify_record.subleader1=subleader1
        modify_record.teach1=teach1
@@ -264,6 +293,8 @@ def honso_modify():
                             place1=place1,
                             start1=start1,
                             end1=end1,
+                            break1=break1,
+                            break_minutes1=break_minutes1,
                             other1=other1,
                             leader1=leader1,
                             subleader1=subleader1,

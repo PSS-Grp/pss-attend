@@ -122,6 +122,13 @@ class Time(db.Model):
     place1 = db.Column(db.String(255))
     start1 = db.Column(db.String(10))
     end1 = db.Column(db.String(10))
+    # [追加] 「手当」欄の先頭に追加した「休憩」チェックボックスと、
+    # チェックを入れたときに入力できる休憩時間（分）。
+    # break1がチェックされているかどうかの真偽値はleader1等と同じ
+    # 形式（チェック時"on"、未チェック時None）で持ち、実際に勤怠一覧
+    # 画面で本葬の実働時間から差し引く分数はbreak_minutes1に保持する。
+    break1 = db.Column(db.String(10))
+    break_minutes1 = db.Column(db.Integer, nullable=True)
     leader1 = db.Column(db.String(10))
     subleader1 = db.Column(db.String(10))
     teach1 = db.Column(db.String(10))
@@ -135,6 +142,10 @@ class Time(db.Model):
     place2 = db.Column(db.String(255))
     start2 = db.Column(db.String(10))
     end2 = db.Column(db.String(10))
+    # [追加] 通夜側の「休憩」チェックボックス・休憩時間（分）。意味はbreak1・
+    # break_minutes1と同様（本葬/通夜で別々に休憩を記録できるようにする）。
+    break2 = db.Column(db.String(10))
+    break_minutes2 = db.Column(db.Integer, nullable=True)
     leader2 = db.Column(db.String(10))
     subleader2 = db.Column(db.String(10))
     teach2 = db.Column(db.String(10))

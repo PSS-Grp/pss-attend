@@ -348,8 +348,13 @@ def judge():
 # 退勤時刻が出勤時刻より前になっているケース（通夜の勤務が深夜0時を
 # またぐ場合など）は、日をまたいだものとして退勤時刻に24時間分を
 # 加算してから計算する。
+#
+# [追加] break_minutesを指定すると、算出した実働時間からその分数を
+# 差し引く（「手当」欄に追加した「休憩」チェック時の休憩時間）。
+# 差し引いた結果がマイナスになる場合（休憩時間を実際の勤務時間より
+# 長く入力してしまった場合など）は0分に切り下げる。
 #------------------------------------------------
-def _calc_work_minutes(start_str, end_str):
+def _calc_work_minutes(start_str, end_str, break_minutes=None):
     if not start_str or not end_str:
         return None
     if start_str == "--:--" or end_str == "--:--":
@@ -363,7 +368,12 @@ def _calc_work_minutes(start_str, end_str):
     end_total = end_h * 60 + end_m
     if end_total < start_total:
         end_total += 24 * 60
-    return end_total - start_total
+    work_minutes = end_total - start_total
+    if break_minutes:
+        work_minutes -= break_minutes
+        if work_minutes < 0:
+            work_minutes = 0
+    return work_minutes
 
 
 #------------------------------------------------
@@ -375,6 +385,16 @@ def _format_work_minutes(minutes):
         return "-"
     hours, mins = divmod(minutes, 60)
     return "{}時間{}分".format(hours, mins)
+
+
+#------------------------------------------------
+# [追加] 休憩時間（分）を勤怠一覧の表に表示するための文字列に変換する。
+# 休憩が入力されていない（None・0）場合は"-"を返す。
+#------------------------------------------------
+def _format_break_minutes(minutes):
+    if not minutes:
+        return "-"
+    return "{}分".format(minutes)
 
 
 @app.route('/attendance_list')
@@ -416,12 +436,15 @@ def attendance_list():
     # [追加] 本葬(start1/end1)・通夜(start2/end2)それぞれの実働時間を計算し、
     # テンプレートに渡す行データ(record_rows)に含める。あわせて、月全体の
     # 本葬合計・通夜合計・（本葬＋通夜の）合計時間も集計する。
+    # [追加] 「手当」欄の「休憩」で入力された休憩時間（break_minutes1/2）は、
+    # 実働時間の計算時にそれぞれ差し引く。休憩時間そのものも表示用に
+    # 一覧の列へ含める。
     honso_total_minutes = 0
     tsuya_total_minutes = 0
     record_rows = []
     for r in records:
-        honso_minutes = _calc_work_minutes(r.start1, r.end1)
-        tsuya_minutes = _calc_work_minutes(r.start2, r.end2)
+        honso_minutes = _calc_work_minutes(r.start1, r.end1, break_minutes=r.break_minutes1)
+        tsuya_minutes = _calc_work_minutes(r.start2, r.end2, break_minutes=r.break_minutes2)
         if honso_minutes:
             honso_total_minutes += honso_minutes
         if tsuya_minutes:
@@ -431,10 +454,12 @@ def attendance_list():
             "place1": r.place1,
             "start1": r.start1,
             "end1": r.end1,
+            "honso_break": _format_break_minutes(r.break_minutes1),
             "honso_duration": _format_work_minutes(honso_minutes),
             "place2": r.place2,
             "start2": r.start2,
             "end2": r.end2,
+            "tsuya_break": _format_break_minutes(r.break_minutes2),
             "tsuya_duration": _format_work_minutes(tsuya_minutes),
         })
 

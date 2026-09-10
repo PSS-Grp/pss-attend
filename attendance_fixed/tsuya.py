@@ -73,22 +73,34 @@ def tsuya_stamp():
 
     start2 = "--:--"
     end2 = "--:--"
+    # [追加] 「手当」欄の先頭に追加した「休憩」チェックボックスと、
+    # チェック時に入力する休憩時間（分）の初期値。
+    break2=None
+    break_minutes2=None
     leader2='off'
-    subleader2=None 
-    teach2=None 
-    wait2=None 
-    designated2=None 
-    distant2=None 
-    special2=None 
-    highway2=None 
-    express2=None 
-    other2=None 
-    record_id=None 
+    subleader2=None
+    teach2=None
+    wait2=None
+    designated2=None
+    distant2=None
+    special2=None
+    highway2=None
+    express2=None
+    other2=None
+    record_id=None
 
     if request.method =='POST':                  # POSTがリクエストされた場合
        place2 = request.form.get('place2')       # place2をから入力値を取得
        start2 = request.form.get('start2')
        end2 = request.form.get('end2')
+       break2 = request.form.get('break2')
+       # [追加] 休憩時間（分）は数値として保存する。未入力・不正な値の
+       # 場合はNoneのまま（＝休憩なし扱い）にする。
+       break_minutes2_raw = request.form.get('break_minutes2')
+       try:
+          break_minutes2 = int(break_minutes2_raw) if break_minutes2_raw else None
+       except ValueError:
+          break_minutes2 = None
        leader2 = request.form.get('leader2')
        subleader2 = request.form.get('subleader2')
        teach2 = request.form.get('teach2')
@@ -124,6 +136,8 @@ def tsuya_stamp():
           time.place2=place2
           time.start2=start2
           time.end2=end2
+          time.break2=break2
+          time.break_minutes2=break_minutes2
           time.leader2=leader2
           time.subleader2=subleader2
           time.teach2=teach2
@@ -177,6 +191,8 @@ def tsuya_stamp():
           modify_record.place2=place2
           modify_record.start2=start2
           modify_record.end2=end2
+          modify_record.break2=break2
+          modify_record.break_minutes2=break_minutes2
           modify_record.leader2=leader2
           modify_record.subleader2=subleader2
           modify_record.teach2=teach2
@@ -208,8 +224,10 @@ def tsuya_stamp():
                             today=today,
                             places=get_places_for_current_user(),
                             start2=start2,
-                            end2=end2, 
-                            leader2=leader2, 
+                            end2=end2,
+                            break2=break2,
+                            break_minutes2=break_minutes2,
+                            leader2=leader2,
                             subleader2=subleader2, 
                             teach2=teach2, 
                             wait2=wait2, 
@@ -258,6 +276,9 @@ def tsuya_modify():
     place2 = record.place2 if record.place2 else "未入力"
     start2 = record.start2
     end2 = "--:--"
+    # [追加] 「休憩」チェックボックスと休憩時間（分）の初期表示値。
+    break2 = "checked" if record.break2 else "off"
+    break_minutes2 = record.break_minutes2 if record.break_minutes2 else ""
     leader2 = "checked" if record.leader2 else "off"
     subleader2 = "checked" if record.subleader2 else "off"
     teach2 = "checked" if record.teach2 else "off"
@@ -272,6 +293,14 @@ def tsuya_modify():
     if request.method == 'POST':                  # リクエストがPOSTの場合
 
        end2 = request.form.get('end2')
+       break2 = request.form.get('break2')
+       # [追加] 休憩時間（分）を数値として保存する。未入力・不正な値の
+       # 場合はNoneのまま（＝休憩なし扱い）にする。
+       break_minutes2_raw = request.form.get('break_minutes2')
+       try:
+          break_minutes2 = int(break_minutes2_raw) if break_minutes2_raw else None
+       except ValueError:
+          break_minutes2 = None
        leader2 = request.form.get('leader2')
        subleader2 = request.form.get('subleader2')
        teach2 = request.form.get('teach2')
@@ -300,6 +329,8 @@ def tsuya_modify():
        modify_record.date=today
        modify_record.number=number
        modify_record.end2=end2
+       modify_record.break2=break2
+       modify_record.break_minutes2=break_minutes2
        modify_record.leader2=leader2
        modify_record.subleader2=subleader2
        modify_record.teach2=teach2
@@ -325,6 +356,8 @@ def tsuya_modify():
                             place2=place2,
                             start2=start2,
                             end2=end2,
+                            break2=break2,
+                            break_minutes2=break_minutes2,
                             other2=other2,
                             leader2=leader2,
                             subleader2=subleader2,

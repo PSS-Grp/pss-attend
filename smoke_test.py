@@ -395,6 +395,12 @@ assert r13.status_code == 200
 assert r13.headers.get("Content-Type", "").startswith("text/csv")
 assert b"0001" in r13.data
 assert b"0002" in r13.data
+# [追加] Timeテーブルのcolumn_listは指定していない（全カラムがそのまま
+# CSV出力の対象になる）ため、新しく追加したbreak_minutes1/break_minutes2列も
+# 自動的にヘッダーへ含まれているはず（Flask-Adminはヘッダーをタイトル
+# ケースに変換するため "Break Minutes1"/"Break Minutes2" という表記になる）。
+assert b"Break Minutes1" in r13.data
+assert b"Break Minutes2" in r13.data
 
 # 検索ボックス(number)で 0001 だけに絞り込んでエクスポート -> 0001の行だけが入っている
 r14 = client_admin.get("/admin/time/export/csv/?search=0001", follow_redirects=False)
@@ -677,6 +683,85 @@ with app.app_context():
     assert record_8002.id != record_8001_id
     assert record_8002.start2 == "20:00"
     assert record_8002.end2 == "23:00"
+
+# --- [追加] 「手当」欄に追加した「休憩」チェックボックス・休憩時間(分)の確認 ---
+#
+# ・honso_stamp/honso_modify・tsuya_stamp/tsuya_modifyの各フォーム画面に
+#   「休憩」チェックボックスと休憩時間(分)の入力欄が表示されていること
+# ・休憩時間(分)を入力して保存すると、Time.break1/break_minutes1（本葬）・
+#   break2/break_minutes2（通夜）としてDBに保存されること
+# ・勤怠一覧画面で、休憩時間の列に表示され、実働時間が
+#   「出勤〜退勤の時間 - 休憩時間」として正しく計算されて表示されること
+#   （月合計にもその差し引き後の値が反映されること）
+# を、他のテストの記録と混ざらない専用のテストユーザー(8003)で確認する。
+
+with app.app_context():
+    if not User.query.filter_by(number="8003").first():
+        db.session.add(User(username="テスト三郎", number="8003",
+                             password=generate_password_hash("test9012"), is_admin=False))
+    db.session.commit()
+
+client_8003 = app.test_client()
+client_8003.post(
+    "/login",
+    data={"login": "ログイン", "number": "8003", "password": "test9012"},
+)
+
+# フォーム画面（出勤入力）に「休憩」項目が追加されていることの確認
+# （8003はまだ今日の記録が無いため、出勤フォームがそのまま表示される）
+r_break_ui_honso_stamp = client_8003.get("/honso_stamp", follow_redirects=False)
+assert r_break_ui_honso_stamp.status_code == 200
+assert "休憩".encode("utf-8") in r_break_ui_honso_stamp.data
+assert 'id="break_minutes1"'.encode("utf-8") in r_break_ui_honso_stamp.data
+
+r_break_ui_honso_modify_pre = client_8003.post(
+    "/honso_stamp",
+    data={"place1": "本社", "start1": "09:00"},
+    follow_redirects=False,
+)
+assert r_break_ui_honso_modify_pre.status_code == 302
+client_8003.get("/judge")
+
+# フォーム画面（退勤入力）にも「休憩」項目が追加されていることの確認
+r_break_ui_honso_modify = client_8003.get("/honso_modify", follow_redirects=False)
+assert r_break_ui_honso_modify.status_code == 200
+assert "休憩".encode("utf-8") in r_break_ui_honso_modify.data
+assert 'id="break_minutes1"'.encode("utf-8") in r_break_ui_honso_modify.data
+
+# 出勤9:00・退勤18:00（9時間=540分）で、休憩45分をチェック付きで保存する
+r_break_modify = client_8003.post(
+    "/honso_modify",
+    data={"end1": "18:00", "break1": "on", "break_minutes1": "45"},
+    follow_redirects=False,
+)
+print("POST /honso_modify (休憩45分付き退勤打刻, 8003) ->", r_break_modify.status_code)
+assert r_break_modify.status_code == 302
+
+with app.app_context():
+    record_8003 = Time.query.filter(Time.number == "8003", Time.date == today_str).first()
+    assert record_8003 is not None
+    assert record_8003.start1 == "09:00"
+    assert record_8003.end1 == "18:00"
+    assert record_8003.break1 == "on"
+    assert record_8003.break_minutes1 == 45
+    # 9:00-18:00は9時間(540分)。休憩45分を差し引くと8時間15分(495分)になるはず
+    # （index.py側のヘルパーで独立に再計算し、期待値とする）。
+    expected_minutes_8003 = index._calc_work_minutes(
+        record_8003.start1, record_8003.end1, break_minutes=record_8003.break_minutes1
+    )
+    assert expected_minutes_8003 == 540 - 45
+    expected_display_8003 = index._format_work_minutes(expected_minutes_8003)
+
+r_attendance_8003 = client_8003.get("/attendance_list", follow_redirects=False)
+print("GET /attendance_list (8003, 休憩45分の実働時間確認) ->", r_attendance_8003.status_code)
+assert r_attendance_8003.status_code == 200
+assert "45分".encode("utf-8") in r_attendance_8003.data  # 休憩の列
+assert expected_display_8003.encode("utf-8") in r_attendance_8003.data  # 実働時間の列（8時間15分）
+# 今月は本葬のみ1件・通夜の記録は無いので、行の実働時間と月の本葬合計・
+# （本葬＋通夜）合計の3か所すべてが同じ「8時間15分」になっているはず。
+assert r_attendance_8003.data.count(expected_display_8003.encode("utf-8")) >= 3
+# 通夜は今月まだ記録が無いので、通夜合計は「0時間0分」のままであること
+assert "0時間0分".encode("utf-8") in r_attendance_8003.data
 
 # --- 「本日の手配書」機能の確認 ---
 

@@ -187,18 +187,21 @@
           <thead>
             <tr>
               <th rowspan="2">日付</th>
-              <th colspan="4" class="section-label">本葬</th>
-              <th colspan="4" class="section-label">通夜</th>
+              <th colspan="5" class="section-label">本葬</th>
+              <th colspan="5" class="section-label">通夜</th>
             </tr>
             <tr>
               <th>会館名</th>
               <th>出勤</th>
               <th>退勤</th>
-              <!-- [追加] 出勤・退勤時刻から計算した実働時間の列 -->
+              <!-- [追加] 「手当」欄の「休憩」で入力された休憩時間（分）の列。
+                   実働時間は、出勤〜退勤の時間からこの休憩時間を差し引いた値。 -->
+              <th>休憩</th>
               <th>実働時間</th>
               <th>会館名</th>
               <th>出勤</th>
               <th>退勤</th>
+              <th>休憩</th>
               <th>実働時間</th>
             </tr>
           </thead>
@@ -209,10 +212,12 @@
               <td>{{ r.place1 or "" }}</td>
               <td>{{ r.start1 or "" }}</td>
               <td>{{ r.end1 or "" }}</td>
+              <td>{{ r.honso_break }}</td>
               <td>{{ r.honso_duration }}</td>
               <td>{{ r.place2 or "" }}</td>
               <td>{{ r.start2 or "" }}</td>
               <td>{{ r.end2 or "" }}</td>
+              <td>{{ r.tsuya_break }}</td>
               <td>{{ r.tsuya_duration }}</td>
             </tr>
             {% endfor %}

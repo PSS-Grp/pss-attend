@@ -112,6 +112,13 @@
     <div id="frame">
       <p class="frame-title">手当</p>
       <p class="option">
+        <!-- [追加] 「手当」欄の先頭に「休憩」を追加。チェックを入れると
+             休憩時間（分）の入力欄が使えるようになる（高速道路／金額の
+             チェックボックスと数値入力の組み合わせと同じ仕組み）。 -->
+        &emsp;<input type="checkbox" id="break1" name="break1" onchange="toggleBreak1()" />&emsp;
+        <label for="break1">休憩</label>
+        <input type="number" min="0" step="1" disabled id="break_minutes1" name="break_minutes1" placeholder="分" /><br /><br />
+
         &emsp;<input type="checkbox" id="leader1" name="leader1" />&emsp;
         <label for="leader1">リーダー</label><br />
 
@@ -146,6 +153,19 @@
     		express1_elem.disabled = false;   //trueグレーアウト
           } else {
                 express1_elem.disabled = true;
+          }
+        }
+      </script>
+
+      <!-- [追加] 「休憩」チェックボックスの状態に応じて、休憩時間（分）の
+           入力欄の有効／無効を切り替える。 -->
+      <script>
+        var break_minutes1_elem = document.getElementById("break_minutes1");
+        function toggleBreak1() {
+          if (document.getElementById("break1").checked) {
+                break_minutes1_elem.disabled = false;
+          } else {
+                break_minutes1_elem.disabled = true;
           }
         }
       </script>
