@@ -244,6 +244,34 @@ r11 = client_admin.get("/admin/user/", follow_redirects=False)
 print("GET /admin/user/ (管理者でログイン済み) ->", r11.status_code)
 assert r11.status_code == 200
 
+# --- [追加] User.honso_wage / User.tsuya_wage（時給）の確認 ---
+# デモ従業員にサンプルの時給が設定されていること、一覧画面に表示されて
+# いること、管理画面から時給を編集できることを確認する。
+with app.app_context():
+    emp0001 = User.query.filter_by(number="0001").first()
+    assert emp0001.honso_wage == 1200
+    assert emp0001.tsuya_wage == 1000
+    emp0001_id = emp0001.id
+
+assert "1200".encode("utf-8") in r11.data and "1000".encode("utf-8") in r11.data
+
+r_wage_edit = client_admin.post(
+    f"/admin/user/edit/?id={emp0001_id}",
+    data={
+        "username": "デモ太郎", "number": "0001", "password": "",
+        "honso_wage": "1500", "tsuya_wage": "1100",
+        "is_admin": "", "is_arranger": "",
+    },
+    follow_redirects=False,
+)
+print("POST /admin/user/edit/ (時給を変更) ->", r_wage_edit.status_code)
+assert r_wage_edit.status_code == 302
+
+with app.app_context():
+    emp0001 = db.session.get(User, emp0001_id)
+    assert emp0001.honso_wage == 1500
+    assert emp0001.tsuya_wage == 1100
+
 r12 = client_admin.get("/admin/place/", follow_redirects=False)
 print("GET /admin/place/ (管理者でログイン済み) ->", r12.status_code)
 assert r12.status_code == 200

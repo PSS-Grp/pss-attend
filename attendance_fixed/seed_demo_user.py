@@ -61,23 +61,33 @@ DEMO_EMPLOYEES = [
         "name": "デモ太郎",
         "password": "demo1234",
         "places": ["愛知葬祭 春日井会場", "平安会館 一宮斎場"],
+        # [追加] 本葬／通夜それぞれの時給サンプル値。管理画面(/admin/user/)で
+        # 時給欄（honso_wage/tsuya_wage）がすぐに確認できるようにするため。
+        "honso_wage": 1200,
+        "tsuya_wage": 1000,
     },
     {
         "number": "0002",
         "name": "デモ次郎",
         "password": "demo2345",
         "places": ["名古屋メモリアルホール", "豊田会館"],
+        "honso_wage": 1300,
+        "tsuya_wage": 1100,
     },
     {
         "number": "0003",
         "name": "デモ花子",
         "password": "demo3456",
         "places": ["岡崎セレモニーホール", "安城会館", "刈谷会館"],
+        "honso_wage": 1250,
+        "tsuya_wage": 1050,
     },
 ]
 
 
-def _create_user_if_missing(number, name, password, is_admin, places=None, is_arranger=False):
+def _create_user_if_missing(
+    number, name, password, is_admin, places=None, is_arranger=False, honso_wage=0, tsuya_wage=0
+):
     existing = User.query.filter_by(number=number).first()
     if existing:
         print(f"  従業員番号 {number} は既に存在します（作成をスキップ）。")
@@ -89,6 +99,8 @@ def _create_user_if_missing(number, name, password, is_admin, places=None, is_ar
         password=generate_password_hash(password),
         is_admin=is_admin,
         is_arranger=is_arranger,
+        honso_wage=honso_wage,
+        tsuya_wage=tsuya_wage,
     )
     db.session.add(user)
     try:
@@ -262,7 +274,8 @@ def main():
         print("デモ用アカウントを準備します。")
         for emp in DEMO_EMPLOYEES:
             _create_user_if_missing(
-                emp["number"], emp["name"], emp["password"], is_admin=False, places=emp["places"]
+                emp["number"], emp["name"], emp["password"], is_admin=False, places=emp["places"],
+                honso_wage=emp.get("honso_wage", 0), tsuya_wage=emp.get("tsuya_wage", 0),
             )
         _create_user_if_missing(ADMIN_NUMBER, ADMIN_NAME, ADMIN_PASSWORD, is_admin=True)
         _create_user_if_missing(ARRANGER_NUMBER, ARRANGER_NAME, ARRANGER_PASSWORD, is_admin=False, is_arranger=True)

@@ -102,8 +102,8 @@ class SecureModelView(AdminAuthMixin, ModelView):
 #   ・新規作成なのにpassword欄が空欄の場合はエラーにする。
 #------------------------------------------------
 class UserModelView(SecureModelView):
-    column_list = ["id", "username", "number", "is_admin", "is_arranger"]
-    form_columns = ["username", "number", "password", "is_admin", "is_arranger"]
+    column_list = ["id", "username", "number", "honso_wage", "tsuya_wage", "is_admin", "is_arranger"]
+    form_columns = ["username", "number", "password", "honso_wage", "tsuya_wage", "is_admin", "is_arranger"]
     form_overrides = {"password": _AdminPasswordField}
     form_widget_args = {
         "password": {

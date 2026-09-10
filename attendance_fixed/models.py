@@ -51,6 +51,12 @@ class User(db.Model, UserMixin):
     # 管理画面(/admin)ではなく、手配書登録画面(/arrangement_manage)に入る。
     # 一般の従業員アカウントは、この手配書登録画面には入れない。
     is_arranger = db.Column(db.Boolean, nullable=False, default=False, server_default="0")
+    # [追加] 従業員ごとの時給（本葬／通夜で単価が異なる場合があるため
+    # 別々のカラムにしている）。金額は円単位の整数とし、未設定の場合は
+    # 0円として扱う（nullable=Falseにはせず、既存の行にも
+    # server_defaultで安全にマイグレーションできるようにしている）。
+    honso_wage = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    tsuya_wage = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
 
 #------------------------------------------------
