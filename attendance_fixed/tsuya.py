@@ -15,6 +15,9 @@ from models import User, Time, Place
 # from models import LoginForm, User ,
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.exc import IntegrityError
+# [追加] 出退勤画面の「登録」ボタンが押されたときにメール通知するための
+# モジュール（notifications.py参照）。
+from notifications import send_attendance_notification
 
 
 #------------------------------------------------
@@ -171,6 +174,19 @@ def tsuya_stamp():
           else:
              other2 = other2
 
+          # [追加] 登録ボタンが押されたことをメールで通知する。
+          send_attendance_notification(
+              shift_label="通夜",
+              user_name=current_user.username,
+              number=session['user_number'],
+              place=place2,
+              other=other2,
+              start=start2,
+              end=end2,
+              break_flag=break2,
+              break_minutes=break_minutes2,
+          )
+
           # [修正] 従来は登録後に読み取り専用の確認画面(tsuya_init.html)へ
           # 遷移して行き止まりになっていたが、本葬・通夜の状態が一目で
           # わかる /judge のハブ画面に戻るようにした。
@@ -214,6 +230,19 @@ def tsuya_stamp():
              other2 = ""
           else:
              other2 = other2
+
+          # [追加] 登録ボタンが押されたことをメールで通知する。
+          send_attendance_notification(
+              shift_label="通夜",
+              user_name=current_user.username,
+              number=session['user_number'],
+              place=place2,
+              other=other2,
+              start=start2,
+              end=end2,
+              break_flag=break2,
+              break_minutes=break_minutes2,
+          )
 
           # [修正] 更新後も読み取り専用の確認画面(tsuya_init.html)ではなく、
           # /judge のハブ画面に戻るようにした。
@@ -273,6 +302,13 @@ def tsuya_modify():
         return redirect('/judge')
 
     record_id = record.id
+    # [追加] 通知メール用に、出勤時に登録された会館名(place2/other2)を
+    # そのまま保持しておく。下のPOST処理でplace2変数は「未入力」表示用に
+    # 上書きされ、other2変数もフォームに入力欄が無いため送信のたびに
+    # 空になってしまう（このモジュール内の既知の挙動）ため、メールには
+    # ここで確保した値を使う。
+    notify_place2 = record.place2
+    notify_other2 = record.other2
     place2 = record.place2 if record.place2 else "未入力"
     start2 = record.start2
     end2 = "--:--"
@@ -342,6 +378,20 @@ def tsuya_modify():
        modify_record.express2=express2
        modify_record.other2=other2
        db.session.commit()                     # 入力値で更新
+
+       # [追加] 登録（退勤）ボタンが押されたことをメールで通知する。
+       # 退勤時間が入力されているため、件名は【退勤】になる。
+       send_attendance_notification(
+           shift_label="通夜",
+           user_name=current_user.username,
+           number=number,
+           place=notify_place2,
+           other=notify_other2,
+           start=start2,
+           end=end2,
+           break_flag=break2,
+           break_minutes=break_minutes2,
+       )
 
        # [修正] 更新後は読み取り専用の確認画面(tsuya_init.html)ではなく、
        # 本葬・通夜の状態が一目でわかる /judge のハブ画面に戻るようにした。

@@ -38,6 +38,27 @@ services:
       # 保存されず、Renderのダッシュボード（Environment）側で入力・管理する。
       - key: DATABASE_URL
         sync: false
+      # [追加] 出退勤画面の「登録」ボタンが押されたときの通知メール送信用
+      # 設定（notifications.py参照）。Gmailのアプリパスワードを使う想定で
+      # SMTP_HOST/SMTP_PORTには初期値を入れているが、他のSMTPサーバーを
+      # 使う場合はRenderのダッシュボードから値を上書きすればよい。
+      # いずれもsync: falseのため値はgitリポジトリには保存されず、
+      # Renderのダッシュボード（Environment）側で入力・管理する。
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      # SMTP認証に使うGmailアドレス（送信元アドレスにもなる）。
+      - key: SMTP_USER
+        sync: false
+      # 上記Gmailアドレスの「アプリパスワード」
+      # （Googleアカウントの通常のログインパスワードではない）。
+      - key: SMTP_PASSWORD
+        sync: false
+      # 通知メールの送信先アドレス（固定の1件。複数宛てにする場合は
+      # カンマ区切りで指定できる）。
+      - key: NOTIFY_EMAIL_TO
+        sync: false
       # Renderが自動的に PYTHON_VERSION より優先して .python-version を
       # 参照するため、ここでの指定は不要（リポジトリ直下の .python-version
       # ファイルを参照）。

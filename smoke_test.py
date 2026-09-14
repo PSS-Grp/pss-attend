@@ -15,6 +15,9 @@ os.chdir(APP_DIR)
 import index  # noqa: E402  registers all routes (login, judge, select, honso, tsuya...)
 from index import app, db  # noqa: E402
 from models import User, Time, Arrangement  # noqa: E402
+import honso  # noqa: E402
+import tsuya  # noqa: E402
+import notifications  # noqa: E402
 
 # [修正] index.pyはもはやモジュールレベルの固定 `today` を持たない
 # （__init__.get_today()を呼び出し都度使う設計に変更したため）。
@@ -762,6 +765,196 @@ assert expected_display_8003.encode("utf-8") in r_attendance_8003.data  # 実働
 assert r_attendance_8003.data.count(expected_display_8003.encode("utf-8")) >= 3
 # 通夜は今月まだ記録が無いので、通夜合計は「0時間0分」のままであること
 assert "0時間0分".encode("utf-8") in r_attendance_8003.data
+
+# --- [追加] 出退勤画面の「登録」ボタンを押した際のメール通知の確認 ---
+#
+# (1) notifications.send_attendance_notification単体のテスト：
+#     smtplib.SMTPを実際には呼ばず（差し替えて）、件名・本文が仕様通りに
+#     組み立てられることを確認する。
+#       ・出勤時間だけが入力されている場合 -> 件名は「【出勤】氏名 会館名」
+#       ・退勤時間まで入力されている場合   -> 件名は「【退勤】氏名 会館名」
+#       ・会館が「その他」の場合は、手入力された会館名を件名・本文に使う
+#       ・休憩時間が入力されている場合は本文に「◯分」、無い場合は「なし」
+# (2) honso.py/tsuya.pyの各画面（出勤・退勤の登録処理）が、実際に
+#     send_attendance_notification()を正しい引数で呼び出していることの確認
+#     （関数自体をテスト用の記録関数に差し替えて検証する）。
+
+
+class _FakeSmtpServer:
+    """[追加] smtplib.SMTPの代わりに使うテスト用のダミークラス。
+    実際にはネットワーク接続やログインを行わず、送信されようとした
+    メッセージ（宛先・本文）だけをクラス変数に記録する。"""
+    sent = []
+
+    def __init__(self, host, port, timeout=None):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False
+
+    def starttls(self):
+        pass
+
+    def login(self, user, password):
+        pass
+
+    def sendmail(self, from_addr, to_addrs, msg):
+        _FakeSmtpServer.sent.append({"from": from_addr, "to": to_addrs, "msg": msg})
+
+
+_orig_smtp = notifications.smtplib.SMTP
+notifications.smtplib.SMTP = _FakeSmtpServer
+
+_orig_honso_send = honso.send_attendance_notification
+_orig_tsuya_send = tsuya.send_attendance_notification
+
+_orig_env = {
+    k: os.environ.get(k)
+    for k in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM", "NOTIFY_EMAIL_TO")
+}
+os.environ["SMTP_USER"] = "sender@example.com"
+os.environ["SMTP_PASSWORD"] = "dummy-app-password"
+os.environ["NOTIFY_EMAIL_TO"] = "notify@example.com"
+
+try:
+    # 出勤のみ（休憩なし） -> 件名は【出勤】
+    _FakeSmtpServer.sent.clear()
+    ok = notifications.send_attendance_notification(
+        shift_label="本葬", user_name="デモ太郎", number="0001",
+        place="愛知葬祭 春日井会場", other=None,
+        start="09:00", end=None, break_flag=None, break_minutes=None,
+    )
+    assert ok is True
+    assert len(_FakeSmtpServer.sent) == 1
+    sent_msg = _FakeSmtpServer.sent[0]["msg"]
+    assert sent_msg  # subject/bodyはRFC2047でエンコードされているため、
+                     # 内容そのものの文字列一致では検証しにくい。
+                     # 代わりに、実際にメール本文をパースして日本語の
+                     # 平文に戻した上で内容を検証する（下記）。
+    import email
+    parsed = email.message_from_string(sent_msg)
+    subject = str(email.header.make_header(email.header.decode_header(parsed["Subject"])))
+    body = parsed.get_payload(decode=True).decode("utf-8")
+    print("通知メール(出勤のみ)の件名 ->", subject)
+    assert subject == "【出勤】デモ太郎 愛知葬祭 春日井会場"
+    assert "氏名: デモ太郎" in body
+    assert "従業員番号: 0001" in body
+    assert "会館名: 愛知葬祭 春日井会場" in body
+    assert "出勤時間: 09:00" in body
+    assert "退勤時間: 未入力" in body
+    assert "休憩時間: なし" in body
+    assert _FakeSmtpServer.sent[0]["to"] == ["notify@example.com"]
+
+    # 退勤まで入力・休憩あり・「その他」の会館 -> 件名は【退勤】、
+    # 会館名は手入力されたother側が使われる
+    _FakeSmtpServer.sent.clear()
+    notifications.send_attendance_notification(
+        shift_label="通夜", user_name="デモ次郎", number="0002",
+        place="その他", other="臨時会場（公民館）",
+        start="18:00", end="21:30", break_flag="on", break_minutes=30,
+    )
+    assert len(_FakeSmtpServer.sent) == 1
+    parsed2 = email.message_from_string(_FakeSmtpServer.sent[0]["msg"])
+    subject2 = str(email.header.make_header(email.header.decode_header(parsed2["Subject"])))
+    body2 = parsed2.get_payload(decode=True).decode("utf-8")
+    print("通知メール(退勤・その他会場・休憩あり)の件名 ->", subject2)
+    assert subject2 == "【退勤】デモ次郎 臨時会場（公民館）"
+    assert "会館名: 臨時会場（公民館）" in body2
+    assert "出勤時間: 18:00" in body2
+    assert "退勤時間: 21:30" in body2
+    assert "休憩時間: 30分" in body2
+
+    # SMTP設定が未完了の場合は、例外にならず送信をスキップすること
+    del os.environ["NOTIFY_EMAIL_TO"]
+    _FakeSmtpServer.sent.clear()
+    ok_skipped = notifications.send_attendance_notification(
+        shift_label="本葬", user_name="デモ太郎", number="0001",
+        place="本社", other=None, start="09:00", end=None,
+        break_flag=None, break_minutes=None,
+    )
+    assert ok_skipped is False
+    assert len(_FakeSmtpServer.sent) == 0
+    os.environ["NOTIFY_EMAIL_TO"] = "notify@example.com"
+
+    # --- (2) honso.py/tsuya.pyからの呼び出し自体の確認（記録用の
+    #     差し替え関数を使い、実際の出退勤フローで正しい引数が
+    #     渡されていることを検証する） ---
+    _notification_calls = []
+
+    def _recording_send_attendance_notification(**kwargs):
+        _notification_calls.append(kwargs)
+        return True
+
+    honso.send_attendance_notification = _recording_send_attendance_notification
+    tsuya.send_attendance_notification = _recording_send_attendance_notification
+
+    with app.app_context():
+        if not User.query.filter_by(number="8004").first():
+            db.session.add(User(username="テスト四郎", number="8004",
+                                 password=generate_password_hash("test3456"), is_admin=False))
+        db.session.commit()
+
+    client_8004 = app.test_client()
+    client_8004.post("/login", data={"login": "ログイン", "number": "8004", "password": "test3456"})
+
+    # 本葬：出勤（休憩なし、会館は「その他」）
+    client_8004.post("/honso_stamp", data={"place1": "その他", "other1": "8004会場", "start1": "11:00"})
+    client_8004.get("/judge")
+    # 本葬：退勤（休憩30分）
+    client_8004.post("/honso_modify", data={"end1": "15:00", "break1": "on", "break_minutes1": "30"})
+    client_8004.get("/judge")
+    # 通夜：出勤
+    client_8004.post("/tsuya_stamp", data={"place2": "本社", "start2": "19:00"})
+    client_8004.get("/judge")
+    # 通夜：退勤（休憩なし）
+    client_8004.post("/tsuya_modify", data={"end2": "22:00"})
+
+    print("8004の一連の操作で記録された通知呼び出し件数 ->", len(_notification_calls))
+    assert len(_notification_calls) == 4
+
+    honso_stamp_call = _notification_calls[0]
+    assert honso_stamp_call["shift_label"] == "本葬"
+    assert honso_stamp_call["place"] == "その他"
+    assert honso_stamp_call["other"] == "8004会場"
+    assert honso_stamp_call["start"] == "11:00"
+    assert not honso_stamp_call["end"] or honso_stamp_call["end"] == "--:--"
+
+    honso_modify_call = _notification_calls[1]
+    assert honso_modify_call["shift_label"] == "本葬"
+    # honso_modify()では、フォームに無いother1が毎回空になってしまう
+    # 既知の挙動があるため、通知には出勤時に記録されたplace1/other1
+    # （"その他"/"8004会場"）がそのまま使われることを確認する。
+    assert honso_modify_call["place"] == "その他"
+    assert honso_modify_call["other"] == "8004会場"
+    assert honso_modify_call["start"] == "11:00"
+    assert honso_modify_call["end"] == "15:00"
+    assert honso_modify_call["break_flag"] == "on"
+    assert honso_modify_call["break_minutes"] == 30
+
+    tsuya_stamp_call = _notification_calls[2]
+    assert tsuya_stamp_call["shift_label"] == "通夜"
+    assert tsuya_stamp_call["place"] == "本社"
+    assert tsuya_stamp_call["start"] == "19:00"
+
+    tsuya_modify_call = _notification_calls[3]
+    assert tsuya_modify_call["shift_label"] == "通夜"
+    assert tsuya_modify_call["start"] == "19:00"
+    assert tsuya_modify_call["end"] == "22:00"
+    assert not tsuya_modify_call["break_flag"]
+finally:
+    # [追加] テスト用に差し替えたものは、後続のテストに影響しないよう
+    # 必ず元に戻す。
+    notifications.smtplib.SMTP = _orig_smtp
+    honso.send_attendance_notification = _orig_honso_send
+    tsuya.send_attendance_notification = _orig_tsuya_send
+    for k, v in _orig_env.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 # --- 「本日の手配書」機能の確認 ---
 

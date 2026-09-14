@@ -15,6 +15,9 @@ from models import User, Time, Place
 # from models import LoginForm, User ,
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.exc import IntegrityError
+# [追加] 出退勤画面の「登録」ボタンが押されたときにメール通知するための
+# モジュール（notifications.py参照）。
+from notifications import send_attendance_notification
 
 
 #------------------------------------------------
@@ -155,6 +158,23 @@ def honso_stamp():
        else:
           other1 = other1
 
+       # [追加] 登録ボタンが押されたことをメールで通知する。出勤のみ入力
+       # された場合は【出勤】、（このフォームで同時に）退勤時間まで
+       # 入力された場合は【退勤】の件名になる（notifications.py参照）。
+       # 送信に失敗しても、ここまでの出勤打刻自体は既に保存済みなので
+       # 処理は続行する。
+       send_attendance_notification(
+           shift_label="本葬",
+           user_name=current_user.username,
+           number=session['user_number'],
+           place=place1,
+           other=other1,
+           start=start1,
+           end=end1,
+           break_flag=break1,
+           break_minutes=break_minutes1,
+       )
+
        # [修正] 従来は登録後に読み取り専用の確認画面(honso_init.html)へ
        # 遷移して行き止まりになっていたが、本葬・通夜の状態が一目でわかる
        # /judge のハブ画面に戻るようにした（退勤入力もここから行える）。
@@ -208,6 +228,13 @@ def honso_modify():
         return redirect('/judge')
 
     record_id = record.id
+    # [追加] 通知メール用に、出勤時に登録された会館名(place1/other1)を
+    # そのまま保持しておく。下のPOST処理でplace1変数は「未入力」表示用に
+    # 上書きされ、other1変数もフォームに入力欄が無いため送信のたびに
+    # 空になってしまう（このモジュール内の既知の挙動）ため、メールには
+    # ここで確保した値を使う。
+    notify_place1 = record.place1
+    notify_other1 = record.other1
     place1 = record.place1 if record.place1 else "未入力"
     start1 = record.start1
     end1 = "--:--"
@@ -279,6 +306,20 @@ def honso_modify():
        db.session.commit()
 
        print("DB更新",express1)
+
+       # [追加] 登録（退勤）ボタンが押されたことをメールで通知する。
+       # 退勤時間が入力されているため、件名は【退勤】になる。
+       send_attendance_notification(
+           shift_label="本葬",
+           user_name=current_user.username,
+           number=number,
+           place=notify_place1,
+           other=notify_other1,
+           start=start1,
+           end=end1,
+           break_flag=break1,
+           break_minutes=break_minutes1,
+       )
 
        # [修正] 更新後は読み取り専用の確認画面(honso_init.html)ではなく、
        # 本葬・通夜の状態が一目でわかる /judge のハブ画面に戻るようにした。
