@@ -11,3 +11,6 @@ gunicorn==23.0.0
 # [追加/Neon対応] DBをSQLiteからNeon(PostgreSQL)に切り替えるための
 # ドライバ。ソースからのビルドが不要な同梱バイナリ版(-binary)を使う。
 psycopg2-binary==2.9.10
+# [追加] 出退勤登録時のメール通知（notifications.py）で、Resend APIを
+# HTTPS経由で呼び出すために使う。
+requests==2.33.1

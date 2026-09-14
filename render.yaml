@@ -38,25 +38,26 @@ services:
       # 保存されず、Renderのダッシュボード（Environment）側で入力・管理する。
       - key: DATABASE_URL
         sync: false
-      # [追加] 出退勤画面の「登録」ボタンが押されたときの通知メール送信用
-      # 設定（notifications.py参照）。Gmailのアプリパスワードを使う想定で
-      # SMTP_HOST/SMTP_PORTには初期値を入れているが、他のSMTPサーバーを
-      # 使う場合はRenderのダッシュボードから値を上書きすればよい。
+      # [追加/修正] 出退勤画面の「登録」ボタンが押されたときの通知メール
+      # 送信用設定（notifications.py参照）。
+      # 当初はGmailのSMTP経由で送る実装だったが、Renderの無料プランでは
+      # SMTP用ポート(25/465/587)への外向き通信がブロックされており
+      # 送信できないことが判明したため、HTTPS経由のメール配信API
+      # （Resend, https://resend.com）を使う実装に変更した。
       # いずれもsync: falseのため値はgitリポジトリには保存されず、
       # Renderのダッシュボード（Environment）側で入力・管理する。
-      - key: SMTP_HOST
-        value: smtp.gmail.com
-      - key: SMTP_PORT
-        value: "587"
-      # SMTP認証に使うGmailアドレス（送信元アドレスにもなる）。
-      - key: SMTP_USER
+      #
+      # Resendのダッシュボードで発行するAPIキー（"re_"で始まる文字列）。
+      - key: RESEND_API_KEY
         sync: false
-      # 上記Gmailアドレスの「アプリパスワード」
-      # （Googleアカウントの通常のログインパスワードではない）。
-      - key: SMTP_PASSWORD
+      # 送信元として表示するアドレス（省略可。省略時はResendが用意する
+      # 検証不要の送信元"onboarding@resend.dev"を使う）。
+      - key: MAIL_FROM
         sync: false
       # 通知メールの送信先アドレス（固定の1件。複数宛てにする場合は
-      # カンマ区切りで指定できる）。
+      # カンマ区切りで指定できる）。Resendの無料プランでは、原則として
+      # Resendアカウント登録時に使ったメールアドレス宛てにしか送信
+      # できないため、このアドレスと同じメールでResendに登録すること。
       - key: NOTIFY_EMAIL_TO
         sync: false
       # Renderが自動的に PYTHON_VERSION より優先して .python-version を

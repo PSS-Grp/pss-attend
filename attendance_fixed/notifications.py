@@ -2,32 +2,40 @@
 # [追加] 出退勤画面の「登録」ボタンが押されたときに、指定したメール
 # アドレスへ通知メールを送信するためのモジュール。
 #
+# [修正] 当初はGmailのSMTP(smtplib)経由で送信する実装にしていたが、
+# Renderの無料プランではSMTP用のポート(25/465/587)への外向き通信が
+# ブロックされており（Render公式ドキュメントに明記された既知の制限）、
+# 実際にデプロイすると "Network is unreachable" で送信に失敗することが
+# 判明した。ポート制限の影響を受けないよう、HTTPS(443番ポート)経由の
+# メール配信API（Resend, https://resend.com）を使う実装に変更した。
+#
 # 実際にメールを送信するには、Render（またはローカル環境）に以下の
 # 環境変数を設定する必要がある。
 #
-#   SMTP_HOST       : SMTPサーバーのホスト名（省略時は smtp.gmail.com）
-#   SMTP_PORT       : SMTPサーバーのポート番号（省略時は 587）
-#   SMTP_USER       : SMTP認証に使うメールアドレス
-#                      （Gmailの場合、送信元アドレスにもなる）
-#   SMTP_PASSWORD   : SMTP認証用パスワード
-#                      （Gmailの場合は通常のパスワードではなく、
-#                        Googleアカウントで発行する「アプリパスワード」を使う）
-#   MAIL_FROM       : 送信元として表示するアドレス（省略時はSMTP_USERと同じ）
+#   RESEND_API_KEY  : Resendのダッシュボードで発行するAPIキー
+#                      （"re_"で始まる文字列）
+#   MAIL_FROM       : 送信元として表示するアドレス
+#                      （省略時は "onboarding@resend.dev"。これはResendが
+#                        用意している検証不要の送信元アドレスで、独自
+#                        ドメインの認証をしなくても送信できる）
 #   NOTIFY_EMAIL_TO : 通知メールの送信先アドレス
-#                      （複数宛てにする場合はカンマ区切りで指定）
+#                      （複数宛てにする場合はカンマ区切りで指定。
+#                        Resend無料プランでは、原則としてResendアカウント
+#                        登録時に使ったメールアドレス宛てにしか送信できない
+#                        ため、このアドレスと同じメールでResendに登録する）
 #
-# SMTP_USER・SMTP_PASSWORD・NOTIFY_EMAIL_TOのいずれかが未設定の環境
-# （ローカルでの動作確認や、このアプリを開発しているセッションの
-# サンドボックス環境など）では、エラーにはせず送信をスキップする。
-# メール通知はあくまで補助的な機能であり、その成否によって本来の
-# 出退勤データの登録処理自体を失敗させないようにするため。
+# RESEND_API_KEY・NOTIFY_EMAIL_TOのいずれかが未設定の環境（ローカルでの
+# 動作確認や、このアプリを開発しているセッションのサンドボックス環境
+# など）では、エラーにはせず送信をスキップする。メール通知はあくまで
+# 補助的な機能であり、その成否によって本来の出退勤データの登録処理
+# 自体を失敗させないようにするため。
 #------------------------------------------------
 import os
-import smtplib
+import json
 import datetime
-from email.mime.text import MIMEText
-from email.header import Header
-from email.utils import formataddr
+import requests
+
+RESEND_API_URL = "https://api.resend.com/emails"
 
 
 #------------------------------------------------
@@ -71,15 +79,12 @@ def _format_break(break_flag, break_minutes):
 #------------------------------------------------
 def send_attendance_notification(shift_label, user_name, number, place, other,
                                   start, end, break_flag, break_minutes):
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_password = os.environ.get("SMTP_PASSWORD")
-    mail_from = os.environ.get("MAIL_FROM") or smtp_user
+    api_key = os.environ.get("RESEND_API_KEY")
+    mail_from = os.environ.get("MAIL_FROM") or "onboarding@resend.dev"
     notify_to_raw = os.environ.get("NOTIFY_EMAIL_TO")
 
-    if not (smtp_user and smtp_password and notify_to_raw):
-        print("[通知メール] SMTP_USER / SMTP_PASSWORD / NOTIFY_EMAIL_TO の"
+    if not (api_key and notify_to_raw):
+        print("[通知メール] RESEND_API_KEY / NOTIFY_EMAIL_TO の"
               "いずれかが未設定のため、通知メールの送信をスキップしました。")
         return False
 
@@ -107,18 +112,30 @@ def send_attendance_notification(shift_label, user_name, number, place, other,
         "休憩時間: {}".format(_format_break(break_flag, break_minutes)),
     ])
 
-    msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = Header(subject, "utf-8")
-    msg["From"] = formataddr((str(Header("勤怠管理システム", "utf-8")), mail_from))
-    msg["To"] = ", ".join(notify_to_list)
+    payload = {
+        "from": "勤怠管理システム <{}>".format(mail_from),
+        "to": notify_to_list,
+        "subject": subject,
+        "text": body,
+    }
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_password)
-            server.sendmail(mail_from, notify_to_list, msg.as_string())
+        response = requests.post(
+            RESEND_API_URL,
+            headers={
+                "Authorization": "Bearer {}".format(api_key),
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(payload),
+            timeout=10,
+        )
+        if response.status_code >= 400:
+            # [追加] メール送信に失敗しても、出退勤の登録処理自体は
+            # 失敗させない。エラー内容はログに残す。
+            print("[通知メール] 送信に失敗しました（HTTP {}）: {}".format(
+                response.status_code, response.text))
+            return False
         return True
     except Exception as e:
-        # [追加] メール送信に失敗しても、出退勤の登録処理自体は失敗させない。
         print("[通知メール] 送信に失敗しました:", e)
         return False
