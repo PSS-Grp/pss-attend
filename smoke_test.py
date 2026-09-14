@@ -1,6 +1,7 @@
 import sys
 import os
 import io
+import json
 import datetime
 
 # [修正] 以前はこのリポジトリを配置した場所に依存する絶対パスが
@@ -769,8 +770,9 @@ assert "0時間0分".encode("utf-8") in r_attendance_8003.data
 # --- [追加] 出退勤画面の「登録」ボタンを押した際のメール通知の確認 ---
 #
 # (1) notifications.send_attendance_notification単体のテスト：
-#     smtplib.SMTPを実際には呼ばず（差し替えて）、件名・本文が仕様通りに
-#     組み立てられることを確認する。
+#     Resend APIへの実際のHTTPリクエスト(requests.post)を実際には
+#     送らず（差し替えて）、件名・本文・宛先が仕様通りに組み立てられる
+#     ことを確認する。
 #       ・出勤時間だけが入力されている場合 -> 件名は「【出勤】氏名 会館名」
 #       ・退勤時間まで入力されている場合   -> 件名は「【退勤】氏名 会館名」
 #       ・会館が「その他」の場合は、手入力された会館名を件名・本文に使う
@@ -780,103 +782,90 @@ assert "0時間0分".encode("utf-8") in r_attendance_8003.data
 #     （関数自体をテスト用の記録関数に差し替えて検証する）。
 
 
-class _FakeSmtpServer:
-    """[追加] smtplib.SMTPの代わりに使うテスト用のダミークラス。
-    実際にはネットワーク接続やログインを行わず、送信されようとした
-    メッセージ（宛先・本文）だけをクラス変数に記録する。"""
-    sent = []
-
-    def __init__(self, host, port, timeout=None):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        return False
-
-    def starttls(self):
-        pass
-
-    def login(self, user, password):
-        pass
-
-    def sendmail(self, from_addr, to_addrs, msg):
-        _FakeSmtpServer.sent.append({"from": from_addr, "to": to_addrs, "msg": msg})
+class _FakeResendResponse:
+    """[追加] requests.postの戻り値の代わりに使うテスト用のダミークラス。
+    Resend APIが返す成功レスポンス(HTTP 200)を模倣する。"""
+    status_code = 200
+    text = '{"id": "fake-email-id"}'
 
 
-_orig_smtp = notifications.smtplib.SMTP
-notifications.smtplib.SMTP = _FakeSmtpServer
+_sent_requests = []
+
+
+def _fake_requests_post(url, headers=None, data=None, timeout=None):
+    """[追加] requests.postの代わりに使うテスト用のダミー関数。
+    実際にはネットワーク接続を行わず、送信されようとしたリクエスト内容
+    （URL・ヘッダー・ボディ）だけを記録する。"""
+    _sent_requests.append({"url": url, "headers": headers, "data": data})
+    return _FakeResendResponse()
+
+
+_orig_requests_post = notifications.requests.post
+notifications.requests.post = _fake_requests_post
 
 _orig_honso_send = honso.send_attendance_notification
 _orig_tsuya_send = tsuya.send_attendance_notification
 
 _orig_env = {
     k: os.environ.get(k)
-    for k in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "MAIL_FROM", "NOTIFY_EMAIL_TO")
+    for k in ("RESEND_API_KEY", "MAIL_FROM", "NOTIFY_EMAIL_TO")
 }
-os.environ["SMTP_USER"] = "sender@example.com"
-os.environ["SMTP_PASSWORD"] = "dummy-app-password"
+os.environ["RESEND_API_KEY"] = "re_dummy_api_key"
 os.environ["NOTIFY_EMAIL_TO"] = "notify@example.com"
 
 try:
     # 出勤のみ（休憩なし） -> 件名は【出勤】
-    _FakeSmtpServer.sent.clear()
+    _sent_requests.clear()
     ok = notifications.send_attendance_notification(
         shift_label="本葬", user_name="デモ太郎", number="0001",
         place="愛知葬祭 春日井会場", other=None,
         start="09:00", end=None, break_flag=None, break_minutes=None,
     )
     assert ok is True
-    assert len(_FakeSmtpServer.sent) == 1
-    sent_msg = _FakeSmtpServer.sent[0]["msg"]
-    assert sent_msg  # subject/bodyはRFC2047でエンコードされているため、
-                     # 内容そのものの文字列一致では検証しにくい。
-                     # 代わりに、実際にメール本文をパースして日本語の
-                     # 平文に戻した上で内容を検証する（下記）。
-    import email
-    parsed = email.message_from_string(sent_msg)
-    subject = str(email.header.make_header(email.header.decode_header(parsed["Subject"])))
-    body = parsed.get_payload(decode=True).decode("utf-8")
-    print("通知メール(出勤のみ)の件名 ->", subject)
-    assert subject == "【出勤】デモ太郎 愛知葬祭 春日井会場"
+    assert len(_sent_requests) == 1
+    payload = json.loads(_sent_requests[0]["data"])
+    print("通知メール(出勤のみ)の件名 ->", payload["subject"])
+    assert payload["subject"] == "【出勤】デモ太郎 愛知葬祭 春日井会場"
+    assert payload["to"] == ["notify@example.com"]
+    assert "onboarding@resend.dev" in payload["from"]  # MAIL_FROM未設定時の既定送信元
+    body = payload["text"]
     assert "氏名: デモ太郎" in body
     assert "従業員番号: 0001" in body
     assert "会館名: 愛知葬祭 春日井会場" in body
     assert "出勤時間: 09:00" in body
     assert "退勤時間: 未入力" in body
     assert "休憩時間: なし" in body
-    assert _FakeSmtpServer.sent[0]["to"] == ["notify@example.com"]
+    assert _sent_requests[0]["headers"]["Authorization"] == "Bearer re_dummy_api_key"
 
     # 退勤まで入力・休憩あり・「その他」の会館 -> 件名は【退勤】、
     # 会館名は手入力されたother側が使われる
-    _FakeSmtpServer.sent.clear()
+    _sent_requests.clear()
     notifications.send_attendance_notification(
         shift_label="通夜", user_name="デモ次郎", number="0002",
         place="その他", other="臨時会場（公民館）",
         start="18:00", end="21:30", break_flag="on", break_minutes=30,
     )
-    assert len(_FakeSmtpServer.sent) == 1
-    parsed2 = email.message_from_string(_FakeSmtpServer.sent[0]["msg"])
-    subject2 = str(email.header.make_header(email.header.decode_header(parsed2["Subject"])))
-    body2 = parsed2.get_payload(decode=True).decode("utf-8")
-    print("通知メール(退勤・その他会場・休憩あり)の件名 ->", subject2)
-    assert subject2 == "【退勤】デモ次郎 臨時会場（公民館）"
+    assert len(_sent_requests) == 1
+    payload2 = json.loads(_sent_requests[0]["data"])
+    print("通知メール(退勤・その他会場・休憩あり)の件名 ->", payload2["subject"])
+    assert payload2["subject"] == "【退勤】デモ次郎 臨時会場（公民館）"
+    body2 = payload2["text"]
     assert "会館名: 臨時会場（公民館）" in body2
     assert "出勤時間: 18:00" in body2
     assert "退勤時間: 21:30" in body2
     assert "休憩時間: 30分" in body2
 
-    # SMTP設定が未完了の場合は、例外にならず送信をスキップすること
+    # RESEND_API_KEY/NOTIFY_EMAIL_TOの設定が未完了の場合は、例外にならず
+    # 送信をスキップすること
     del os.environ["NOTIFY_EMAIL_TO"]
-    _FakeSmtpServer.sent.clear()
+    _sent_requests.clear()
     ok_skipped = notifications.send_attendance_notification(
         shift_label="本葬", user_name="デモ太郎", number="0001",
         place="本社", other=None, start="09:00", end=None,
         break_flag=None, break_minutes=None,
     )
     assert ok_skipped is False
-    assert len(_FakeSmtpServer.sent) == 0
+    assert len(_sent_requests) == 0
     os.environ["NOTIFY_EMAIL_TO"] = "notify@example.com"
 
     # --- (2) honso.py/tsuya.pyからの呼び出し自体の確認（記録用の
@@ -947,7 +936,7 @@ try:
 finally:
     # [追加] テスト用に差し替えたものは、後続のテストに影響しないよう
     # 必ず元に戻す。
-    notifications.smtplib.SMTP = _orig_smtp
+    notifications.requests.post = _orig_requests_post
     honso.send_attendance_notification = _orig_honso_send
     tsuya.send_attendance_notification = _orig_tsuya_send
     for k, v in _orig_env.items():
