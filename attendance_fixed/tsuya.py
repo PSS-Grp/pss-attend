@@ -94,8 +94,11 @@ def tsuya_stamp():
     # 既にTime.place2/other2に反映されている（arrangement.py参照）。
     # その場合は出勤入力フォームの会館名欄に、その値を初めから
     # 選択された状態で表示する（honso_stamp()と同じ考え方）。
+    # [追加] さらに、その場合は本人が会館名を選び直せないよう、
+    # 会館名欄を変更不可（読み取り専用）にする。
     place2 = existing_record.place2 if existing_record else None
     other2 = existing_record.other2 if existing_record else None
+    place_locked = bool(place2)
     record_id=None
 
     if request.method =='POST':                  # POSTがリクエストされた場合
@@ -259,6 +262,7 @@ def tsuya_stamp():
                             today=today,
                             places=get_places_for_current_user(),
                             place2=place2,
+                            place_locked=place_locked,
                             start2=start2,
                             end2=end2,
                             break2=break2,

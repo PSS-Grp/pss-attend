@@ -72,6 +72,10 @@ assert "その他".encode("utf-8") in r5.data
 assert "名古屋メモリアルホール".encode("utf-8") not in r5.data
 # 元の固定リストの名残（"項目4"など）が残っていないことの確認
 assert "項目4".encode("utf-8") not in r5.data
+# [追加] 手配者が会館名を事前設定していない通常のケースでは、会館名欄は
+# 変更可能（<select>にdisabledが付かない）で、注意書きも出ないこと
+assert '<select id="place1" name="place1" required disabled>'.encode("utf-8") not in r5.data
+assert "会館名は手配者が設定済みのため、変更できません".encode("utf-8") not in r5.data
 
 r6 = client.post(
     "/honso_stamp",
@@ -1439,6 +1443,11 @@ r_honso_8005_preset = client_8005.get("/honso_stamp", follow_redirects=False)
 print("GET /honso_stamp (8005, 手配者設定済みの会館名確認) ->", r_honso_8005_preset.status_code)
 assert r_honso_8005_preset.status_code == 200
 assert "selected>五郎会館</option>".encode("utf-8") in r_honso_8005_preset.data
+# [追加] 会館名欄が変更不可（<select>にdisabled、hidden inputで値を維持）に
+# なっており、注意書きも表示されていること
+assert '<select id="place1" name="place1" required disabled>'.encode("utf-8") in r_honso_8005_preset.data
+assert '<input type="hidden" name="place1" value="五郎会館">'.encode("utf-8") in r_honso_8005_preset.data
+assert "会館名は手配者が設定済みのため、変更できません".encode("utf-8") in r_honso_8005_preset.data
 
 # 8005本人が実際に出勤打刻する（会館名は手配者が設定した値のまま）。
 # 以前はここで新規にTime行を作ろうとして一意制約に抵触し、

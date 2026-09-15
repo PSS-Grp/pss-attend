@@ -7,7 +7,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}：{{record_id}}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
-
+    <style>
+      /* [追加] 手配者が会館名を設定済みの場合の注意書き用スタイル。 */
+      .place-locked-note {
+        color: #077685;
+        font-size: 13px;
+        margin: 4px 0 10px 0;
+      }
+    </style>
   </head>
 
   <body>
@@ -35,20 +42,33 @@
                      を表示するように変更。「その他」は従来通り末尾に固定で残し、
                      手動入力(other2)も引き続き使えるようにしている。
                      [追加] 手配者が事前に会館名を設定していた場合(place2)は、
-                     そのオプションを初めから選択済みにする。 -->
-                <select id="place2" name="place2" required>
+                     そのオプションを初めから選択済みにし、かつ本人が選び
+                     直せないよう<select>自体をdisabledにする。disabledな
+                     <select>はフォーム送信時に値が送られないため、
+                     実際に送信する値はhidden inputで別途用意する。 -->
+                <select id="place2" name="place2" required {% if place_locked %}disabled{% endif %}>
                   <option value="" disabled {% if not place2 %}selected{% endif %}>選択してください。</option>
                   {% for p in places %}
                   <option {% if place2 == p %}selected{% endif %}>{{ p }}</option>
                   {% endfor %}
                   <option {% if place2 == "その他" %}selected{% endif %}>その他</option>
                 </select>
+                {% if place_locked %}
+                <input type="hidden" name="place2" value="{{ place2 }}">
+                {% endif %}
             </td>
           </tr>
         </table>
+        {% if place_locked %}
+        <p class="place-locked-note">※会館名は手配者が設定済みのため、変更できません。</p>
+        {% endif %}
         <p>
         <label for="other2">　その他：</label>
-        <input type="text" required {% if place2 != "その他" %}disabled{% endif %} id="other2" name="other2" placeholder="会 館 名" value="{{ other2 or '' }}" /></p>
+        <input type="text" required {% if place_locked or place2 != "その他" %}disabled{% endif %} id="other2" name="other2" placeholder="会 館 名" value="{{ other2 or '' }}" />
+        {% if place_locked and place2 == "その他" %}
+        <input type="hidden" name="other2" value="{{ other2 or '' }}">
+        {% endif %}
+        </p>
     </div>
 
     <script>
@@ -56,6 +76,12 @@
       // 事前に会館名を設定していた（＝ページ読み込み時点で既に選択済み）
       // 場合に出勤時間欄が押せないままになっていたため、関数化して
       // ページ読み込み時にも一度呼び出すようにした。
+      // [修正] ページ読み込み時の呼び出しをスクリプトタグの直後に
+      // 書いていたため、まだ後方（別の#frame内）にある出勤時間欄
+      // (start2)がDOM上にまだ存在せず、実際には毎回エラーになって
+      // 何も反映されていなかった（手配者が会館名を設定済みでも
+      // 出勤時間欄が押せないままになる不具合の原因）。DOMContentLoaded
+      // まで待ってから呼び出すようにして修正した。
       function updatePlace2Dependents(){
         var place2_elem = document.getElementById("place2");
         var place2_select_value = place2_elem.options[place2_elem.selectedIndex].value;
@@ -67,14 +93,18 @@
         }else{
                 start2_elem.disabled = false;
         }
+        // [追加] 手配者が会館名を設定済み(place_locked)の間は、その他欄の
+        // 有効/無効はサーバー側の描画のまま維持し、ここでは変更しない。
+        {% if not place_locked %}
         if(place2_select_value == "その他"){
                 other2_elem.disabled = false;
         }else{
                 other2_elem.disabled = true;
         }
+        {% endif %}
       }
       document.getElementById("place2").addEventListener("change", updatePlace2Dependents, false);
-      updatePlace2Dependents();
+      document.addEventListener("DOMContentLoaded", updatePlace2Dependents);
     </script>
 
     <div id="frame">

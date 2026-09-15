@@ -97,8 +97,13 @@ def honso_stamp():
     # その場合は出勤入力フォームの会館名欄に、その値を初めから
     # 選択された状態で表示する（手配者がユーザーの代理で会館名を
     # 設定したことがそのまま画面に反映されるようにするため）。
+    # [追加] さらに、その場合は本人が会館名を選び直せないよう、
+    # 会館名欄を変更不可（読み取り専用）にする。place_locked=Trueの
+    # 間、テンプレート側で<select>にdisabledを付け、送信用にhidden
+    # inputで値を維持する。
     place1 = existing_record.place1 if existing_record else None
     other1 = existing_record.other1 if existing_record else None
+    place_locked = bool(place1)
 
     if request.method =='POST':                  # POSTがリクエストされた場合
        place1 = request.form.get('place1')       # place1をから入力値を取得
@@ -204,6 +209,7 @@ def honso_stamp():
                             today=today,
                             places=get_places_for_current_user(),
                             place1=place1,
+                            place_locked=place_locked,
                             start1=start1,
                             end1=end1,
                             break1=break1,
