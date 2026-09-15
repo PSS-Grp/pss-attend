@@ -33,7 +33,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
-from models import User, Arrangement, Place
+from models import User, Arrangement, Place, Time
 from sqlalchemy.exc import IntegrityError
 
 
@@ -101,6 +101,46 @@ def _effective_place(place, other_place):
     if place == "その他":
         return other_place or None
     return place or None
+
+
+#------------------------------------------------
+# [追加] 手配者が手配書登録画面で会館名を選択した場合、その対象ユーザーの
+# 出退勤画面(honso_stamp/tsuya_stamp)にもその会館名が反映されるよう、
+# Time.place1/other1（本葬）またはplace2/other2（通夜）に書き込む。
+# 「手配者がユーザーの代理で会館名を設定する」という位置づけのため、
+# 対象ユーザー・日付のTimeレコードが無ければ新規作成し、既に値が
+# 入っていても上書きする。
+#
+# 会館名が選択されていない（未定のまま）場合は何もしない。手配書の
+# メモだけを更新したくて会館名欄を選び直さなかったときに、既に入って
+# いる会館名（従業員本人が既に打刻していた場合はその値）を誤って
+# 消してしまわないようにするため。
+#------------------------------------------------
+def _apply_place_to_time_record(number, shift, date_str, place, other_place):
+    if not place:
+        return
+
+    record = Time.query.filter_by(number=number, date=date_str).first()
+    if not record:
+        record = Time(number=number, date=date_str)
+        db.session.add(record)
+
+    if shift == "honso":
+        record.place1 = place
+        record.other1 = other_place if place == "その他" else ""
+    else:
+        record.place2 = place
+        record.other2 = other_place if place == "その他" else ""
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        # [追加] ごく稀に、手配者がこの操作をしたのとほぼ同時に従業員
+        # 本人がその日の出勤打刻を行い、Time(number, date)の一意制約に
+        # 抵触することがある。その場合は従業員本人の打刻データを
+        # 優先し、手配者側の会館名設定は反映しない（エラー画面は
+        # 出さず、手配書自体の登録は成功させる）。
+        db.session.rollback()
 
 
 #------------------------------------------------
@@ -227,6 +267,13 @@ def arrangement_manage():
                 # エラー画面を出さずに登録済み一覧の画面に戻す
                 # （どちらか一方の内容が保存されている状態になる）。
                 db.session.rollback()
+
+            # [追加] 会館名が選択されていれば、対象ユーザーの出退勤画面
+            # （honso_stamp/tsuya_stamp）にも反映されるよう、Timeレコードの
+            # place1/other1（本葬）またはplace2/other2（通夜）に書き込む
+            # （「手配者がユーザーの代理で会館名を設定する」イメージ）。
+            _apply_place_to_time_record(target_user.number, shift, date_str, place, other_place)
+
             return redirect(url_for('arrangement_manage'))
 
     # [追加] 対象ユーザーの選択肢は、一般従業員（管理者・手配者を除く）のみ。

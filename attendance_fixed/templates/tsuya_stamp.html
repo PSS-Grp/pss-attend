@@ -33,32 +33,36 @@
                 <!-- [修正] 会館名の一覧を全ユーザー共通の固定リストから、
                      ログイン中のユーザーごとに異なる一覧（places, tsuya.pyのget_places_for_current_userで取得）
                      を表示するように変更。「その他」は従来通り末尾に固定で残し、
-                     手動入力(other2)も引き続き使えるようにしている。 -->
+                     手動入力(other2)も引き続き使えるようにしている。
+                     [追加] 手配者が事前に会館名を設定していた場合(place2)は、
+                     そのオプションを初めから選択済みにする。 -->
                 <select id="place2" name="place2" required>
-                  <option value="" disabled selected>選択してください。</option>
+                  <option value="" disabled {% if not place2 %}selected{% endif %}>選択してください。</option>
                   {% for p in places %}
-                  <option>{{ p }}</option>
+                  <option {% if place2 == p %}selected{% endif %}>{{ p }}</option>
                   {% endfor %}
-                  <option>その他</option>
+                  <option {% if place2 == "その他" %}selected{% endif %}>その他</option>
                 </select>
             </td>
           </tr>
         </table>
         <p>
         <label for="other2">　その他：</label>
-        <input type="text" required disabled id="other2" name="other2" placeholder="会 館 名" /></p>
+        <input type="text" required {% if place2 != "その他" %}disabled{% endif %} id="other2" name="other2" placeholder="会 館 名" value="{{ other2 or '' }}" /></p>
     </div>
 
     <script>
-      document.getElementById("place2").addEventListener("change", function(){
+      // [修正] 元は<select>のchangeイベント時にしか実行されず、手配者が
+      // 事前に会館名を設定していた（＝ページ読み込み時点で既に選択済み）
+      // 場合に出勤時間欄が押せないままになっていたため、関数化して
+      // ページ読み込み時にも一度呼び出すようにした。
+      function updatePlace2Dependents(){
         var place2_elem = document.getElementById("place2");
-//      console.log(place2_elem);
         var place2_select_value = place2_elem.options[place2_elem.selectedIndex].value;
         var start2_elem = document.getElementById("start2");
-        var end2_elem = document.getElementById("end2");
         var other2_elem = document.getElementById("other2");
 
-        if(place2_select_value == "選択してください"){
+        if(place2_select_value == ""){
                 start2_elem.disabled = true; //グレーアウト
         }else{
                 start2_elem.disabled = false;
@@ -68,7 +72,9 @@
         }else{
                 other2_elem.disabled = true;
         }
-      }, false);
+      }
+      document.getElementById("place2").addEventListener("change", updatePlace2Dependents, false);
+      updatePlace2Dependents();
     </script>
 
     <div id="frame">

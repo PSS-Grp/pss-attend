@@ -1380,4 +1380,125 @@ r_today_0003_undecided = client_0003_place.get("/today_arrangement", follow_redi
 assert "会館名テスト（未定のまま）".encode("utf-8") in r_today_0003_undecided.data
 assert "会館名：".encode("utf-8") not in r_today_0003_undecided.data
 
+# --- [追加] 手配者が選択した会館名が、Time.place1/place2にも反映され、
+#     対象ユーザー本人の出退勤画面(honso_stamp/tsuya_stamp)にも
+#     表示されることの確認（「手配者がユーザーの代理で会館名を
+#     設定する」機能）---
+
+# 会館名がTime側にまだ何も無い、全くの新規ユーザーで確認する
+with app.app_context():
+    if not User.query.filter_by(number="8005").first():
+        db.session.add(User(username="テスト五郎", number="8005",
+                             password=generate_password_hash("test4567"), is_admin=False))
+        db.session.commit()
+    target_8005 = User.query.filter_by(number="8005").first()
+    target_8005_id = target_8005.id
+    # このユーザーにはまだTimeレコードが1件も無いことを前提にする
+    assert Time.query.filter_by(number="8005").first() is None
+
+# 8005用の会館名を1件登録しておく（既存の「会館名の登録」機能を利用）
+client_arranger.post(
+    "/arrangement_manage",
+    data={"form_type": "place", "place_target_user_id": str(target_8005_id), "place_name": "五郎会館"},
+    follow_redirects=False,
+)
+
+# 手配者が、8005・本葬・本日の手配書に「五郎会館」を選んで登録する
+# （画像・メモは無しでもよいはずだが、既存のバリデーションに合わせて
+# メモを入れておく）
+r_arr_new_time = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_8005_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "事前に会館名だけ設定するテスト",
+        "place": "五郎会館",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名=五郎会館, 8005宛て・本葬・新規Time) ->", r_arr_new_time.status_code)
+assert r_arr_new_time.status_code == 302
+
+# Timeレコードが新規作成され、place1に反映されていること
+# （start1はまだ本人が打刻していないのでNoneのまま）
+with app.app_context():
+    time_8005 = Time.query.filter_by(number="8005", date=today_str).first()
+    assert time_8005 is not None
+    assert time_8005.place1 == "五郎会館"
+    assert time_8005.other1 == ""
+    assert time_8005.start1 is None
+    time_8005_id = time_8005.id
+
+# 対象ユーザー(8005)本人が出勤入力画面を開くと、会館名が既に選択された
+# 状態で表示され、リダイレクトされない（＝出勤入力自体は引き続き
+# 行える）こと
+client_8005 = app.test_client()
+client_8005.post("/login", data={"login": "ログイン", "number": "8005", "password": "test4567"})
+r_honso_8005_preset = client_8005.get("/honso_stamp", follow_redirects=False)
+print("GET /honso_stamp (8005, 手配者設定済みの会館名確認) ->", r_honso_8005_preset.status_code)
+assert r_honso_8005_preset.status_code == 200
+assert "selected>五郎会館</option>".encode("utf-8") in r_honso_8005_preset.data
+
+# 8005本人が実際に出勤打刻する（会館名は手配者が設定した値のまま）。
+# 以前はここで新規にTime行を作ろうとして一意制約に抵触し、
+# 出勤時刻が保存されないままIntegrityErrorでもみ消されていたが、
+# 既存行を更新するよう修正済みなので、正しく保存されるはず。
+r_honso_8005_clockin = client_8005.post(
+    "/honso_stamp",
+    data={"place1": "五郎会館", "start1": "09:00"},
+    follow_redirects=False,
+)
+print("POST /honso_stamp (8005, 手配者設定済みの会館名のまま出勤) ->", r_honso_8005_clockin.status_code)
+assert r_honso_8005_clockin.status_code == 302
+
+with app.app_context():
+    time_8005_after_clockin = db.session.get(Time, time_8005_id)
+    assert time_8005_after_clockin is not None
+    assert time_8005_after_clockin.place1 == "五郎会館"
+    assert time_8005_after_clockin.start1 == "09:00"
+    # 新しい行が作られたのではなく、手配者が作った行がそのまま
+    # 更新されたこと（＝id が変わっていないこと）を確認
+    assert Time.query.filter_by(number="8005", date=today_str).count() == 1
+
+# 手配者が後から別の会館名に変更すると、同じTime行が上書きされること
+# （新しい行が増えるわけではない）
+r_arr_change_place = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_8005_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "会館名を変更するテスト",
+        "place": "その他",
+        "other_place": "変更後の会場",
+    },
+    follow_redirects=False,
+)
+assert r_arr_change_place.status_code == 302
+with app.app_context():
+    time_8005_after_change = db.session.get(Time, time_8005_id)
+    assert time_8005_after_change.place1 == "その他"
+    assert time_8005_after_change.other1 == "変更後の会場"
+    assert time_8005_after_change.start1 == "09:00"  # 既存の打刻データは維持される
+    assert Time.query.filter_by(number="8005", date=today_str).count() == 1
+
+# 会館名を選ばず(「未定」のまま)手配書のメモだけ更新した場合は、
+# 既にTimeに入っている会館名を誤って消さないこと
+r_arr_no_change = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_8005_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "会館名は変更しない・メモだけ更新するテスト",
+    },
+    follow_redirects=False,
+)
+assert r_arr_no_change.status_code == 302
+with app.app_context():
+    time_8005_after_noop = db.session.get(Time, time_8005_id)
+    assert time_8005_after_noop.place1 == "その他"
+    assert time_8005_after_noop.other1 == "変更後の会場"
+
 print("\nALL SMOKE TESTS PASSED")

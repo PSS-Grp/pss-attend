@@ -89,7 +89,13 @@ def tsuya_stamp():
     special2=None
     highway2=None
     express2=None
-    other2=None
+    # [修正] 手配者が「手配書登録」画面(/arrangement_manage)で、この
+    # ユーザー・通夜・本日の会館名を事前に選択していた場合、その値が
+    # 既にTime.place2/other2に反映されている（arrangement.py参照）。
+    # その場合は出勤入力フォームの会館名欄に、その値を初めから
+    # 選択された状態で表示する（honso_stamp()と同じ考え方）。
+    place2 = existing_record.place2 if existing_record else None
+    other2 = existing_record.other2 if existing_record else None
     record_id=None
 
     if request.method =='POST':                  # POSTがリクエストされた場合
@@ -252,6 +258,7 @@ def tsuya_stamp():
                             title="通夜出勤入力",
                             today=today,
                             places=get_places_for_current_user(),
+                            place2=place2,
                             start2=start2,
                             end2=end2,
                             break2=break2,

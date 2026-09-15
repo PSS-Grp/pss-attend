@@ -33,32 +33,36 @@
                 <!-- [修正] 会館名の一覧を全ユーザー共通の固定リストから、
                      ログイン中のユーザーごとに異なる一覧（places, honso.pyのget_places_for_current_userで取得）
                      を表示するように変更。「その他」は従来通り末尾に固定で残し、
-                     手動入力(other1)も引き続き使えるようにしている。 -->
+                     手動入力(other1)も引き続き使えるようにしている。
+                     [追加] 手配者が事前に会館名を設定していた場合(place1)は、
+                     そのオプションを初めから選択済みにする。 -->
                 <select id="place1" name="place1" required>
-                  <option value="" disabled selected>選択してください。</option>
+                  <option value="" disabled {% if not place1 %}selected{% endif %}>選択してください。</option>
                   {% for p in places %}
-                  <option>{{ p }}</option>
+                  <option {% if place1 == p %}selected{% endif %}>{{ p }}</option>
                   {% endfor %}
-                  <option>その他</option>
+                  <option {% if place1 == "その他" %}selected{% endif %}>その他</option>
                 </select>
             </td>
           </tr>
         </table>
         <p>
         <label for="other1">　その他：</label>
-        <input type="text" required disabled id="other1" name="other1" placeholder="会 館 名" /></p>
+        <input type="text" required {% if place1 != "その他" %}disabled{% endif %} id="other1" name="other1" placeholder="会 館 名" value="{{ other1 or '' }}" /></p>
     </div>
 
     <script>
-      document.getElementById("place1").addEventListener("change", function(){
+      // [修正] 元は<select>のchangeイベント時にしか実行されず、手配者が
+      // 事前に会館名を設定していた（＝ページ読み込み時点で既に選択済み）
+      // 場合に出勤時間欄が押せないままになっていたため、関数化して
+      // ページ読み込み時にも一度呼び出すようにした。
+      function updatePlace1Dependents(){
         var place1_elem = document.getElementById("place1");
-//      console.log(place1_elem);
         var place1_select_value = place1_elem.options[place1_elem.selectedIndex].value;
         var start1_elem = document.getElementById("start1");
-        var end1_elem = document.getElementById("end1");
         var other1_elem = document.getElementById("other1");
 
-        if(place1_select_value == "選択してください"){
+        if(place1_select_value == ""){
                 start1_elem.disabled = true; //グレーアウト
         }else{
                 start1_elem.disabled = false;
@@ -68,7 +72,9 @@
         }else{
                 other1_elem.disabled = true;
         }
-      }, false);
+      }
+      document.getElementById("place1").addEventListener("change", updatePlace1Dependents, false);
+      updatePlace1Dependents();
     </script>
 
     <div id="frame">

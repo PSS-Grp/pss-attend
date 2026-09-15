@@ -91,7 +91,14 @@ def honso_stamp():
     special1=None
     highway1=None
     express1=None
-    other1=None
+    # [修正] 手配者が「手配書登録」画面(/arrangement_manage)で、この
+    # ユーザー・本葬・本日の会館名を事前に選択していた場合、その値が
+    # 既にTime.place1/other1に反映されている（arrangement.py参照）。
+    # その場合は出勤入力フォームの会館名欄に、その値を初めから
+    # 選択された状態で表示する（手配者がユーザーの代理で会館名を
+    # 設定したことがそのまま画面に反映されるようにするため）。
+    place1 = existing_record.place1 if existing_record else None
+    other1 = existing_record.other1 if existing_record else None
 
     if request.method =='POST':                  # POSTがリクエストされた場合
        place1 = request.form.get('place1')       # place1をから入力値を取得
@@ -116,9 +123,20 @@ def honso_stamp():
        express1 = request.form.get('express1')
        other1 = request.form.get('other1')
 
-       time = Time()                             # Timeテーブルに追加することを指定
-       time.date=today
-       time.number=session['user_number']
+       # [修正] 以前は常に新しいTime()行を作って追加していたが、これだと
+       # 手配者が「手配書登録」画面で先にこのユーザー・本葬・本日の
+       # 会館名を設定していた場合（Time.place1だけが入った行が既に
+       # 存在する場合）、ここで新規行を作ろうとしてTime(number, date)の
+       # 一意制約に抵触し、下のIntegrityError処理で本葬の出勤打刻
+       # そのものが保存されずに/judgeへ戻ってしまっていた。
+       # tsuya_stamp()と同様に、その日の行が既にあれば新規作成ではなく
+       # その行を更新するようにした。
+       if existing_record:
+          time = existing_record
+       else:
+          time = Time()                          # Timeテーブルに追加することを指定
+          time.date=today
+          time.number=session['user_number']
        time.place1=place1
        time.start1=start1
        time.end1=end1
@@ -134,7 +152,8 @@ def honso_stamp():
        time.highway1=highway1
        time.express1=express1
        time.other1=other1
-       db.session.add(time)                      # 入力値をTimeテーブルに追加
+       if not existing_record:
+          db.session.add(time)                   # 入力値をTimeテーブルに追加
        try:
           db.session.commit()
        except IntegrityError:
@@ -184,6 +203,7 @@ def honso_stamp():
                             title="本葬出勤入力",
                             today=today,
                             places=get_places_for_current_user(),
+                            place1=place1,
                             start1=start1,
                             end1=end1,
                             break1=break1,
