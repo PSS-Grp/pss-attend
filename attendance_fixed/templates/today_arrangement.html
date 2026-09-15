@@ -78,6 +78,13 @@
       .pdf-link:hover {
         background: #055c68;
       }
+      /* [追加] 手配者が指定した会館名の表示用スタイル。 */
+      .arrangement-place {
+        color: #077685;
+        font-weight: bold;
+        font-size: 15px;
+        margin-bottom: 10px;
+      }
       .arrangement-memo {
         color: #333;
         font-size: 15px;
@@ -162,6 +169,11 @@
         <div class="arrangement-block honso">
           <h2>本葬</h2>
           {% if honso_arrangement %}
+            <!-- [追加] 手配者が選択した会館名（「その他」の場合は手入力分）を表示する。 -->
+            {% set honso_place = (honso_arrangement.other_place if honso_arrangement.place == "その他" else honso_arrangement.place) %}
+            {% if honso_place %}
+            <p class="arrangement-place">会館名：{{ honso_place }}</p>
+            {% endif %}
             {% if honso_arrangement.image_filename %}
               {% if honso_arrangement.image_filename.lower().endswith('.pdf') %}
               <a class="pdf-link" href="{{ url_for('arrangement_image', arrangement_id=honso_arrangement.id) }}" target="_blank">本葬の手配書PDFを開く</a>
@@ -180,6 +192,10 @@
         <div class="arrangement-block tsuya">
           <h2>通夜</h2>
           {% if tsuya_arrangement %}
+            {% set tsuya_place = (tsuya_arrangement.other_place if tsuya_arrangement.place == "その他" else tsuya_arrangement.place) %}
+            {% if tsuya_place %}
+            <p class="arrangement-place">会館名：{{ tsuya_place }}</p>
+            {% endif %}
             {% if tsuya_arrangement.image_filename %}
               {% if tsuya_arrangement.image_filename.lower().endswith('.pdf') %}
               <a class="pdf-link" href="{{ url_for('arrangement_image', arrangement_id=tsuya_arrangement.id) }}" target="_blank">通夜の手配書PDFを開く</a>

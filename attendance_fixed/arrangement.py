@@ -66,6 +66,44 @@ def _guess_mimetype(filename):
 
 
 #------------------------------------------------
+# [追加] 指定したユーザーに紐づく会館名の一覧を取得するヘルパー。
+# honso.get_places_for_current_user / tsuya.get_places_for_current_user と
+# 同じ考え方だが、こちらはログイン中の本人ではなく、手配書の対象ユーザー
+# （手配者が選択した任意のユーザー）向けに使うため、user_idを引数で受け取る。
+#------------------------------------------------
+def _places_for_user(user_id):
+    return [
+        p.place
+        for p in Place.query.filter(
+            (Place.user_id == user_id) | (Place.user_id.is_(None))
+        )
+        .order_by(Place.id)
+        .all()
+    ]
+
+
+#------------------------------------------------
+# [追加] 手配書登録画面で、対象ユーザーを切り替えたときに会館名の選択肢も
+# 連動して切り替えられるようにするため、従業員ごとの会館名一覧を
+# あらかじめまとめて用意し、JavaScript側（テンプレートの<script>内）に
+# 渡す。{"1": ["会館A", "会館B"], "2": [...] , ...} という形式。
+#------------------------------------------------
+def _employee_places_map(employees):
+    return {str(e.id): _places_for_user(e.id) for e in employees}
+
+
+#------------------------------------------------
+# [追加] 「その他」が選択されていた場合は手入力の会館名(other_place)を、
+# それ以外の場合は選択された会館名(place)をそのまま返す表示用ヘルパー。
+# 未入力の場合はNoneを返す（テンプレート側で「未定」等の表示に使う）。
+#------------------------------------------------
+def _effective_place(place, other_place):
+    if place == "その他":
+        return other_place or None
+    return place or None
+
+
+#------------------------------------------------
 # [追加] 手配者アカウント専用ページ用のデコレータ。
 # @login_required と組み合わせて使う（未ログインは@login_requiredが
 # 先に/loginへリダイレクトする）。ログイン済みだが手配者でない場合は
@@ -120,6 +158,14 @@ def arrangement_manage():
         date_str = request.form.get('date')
         memo = (request.form.get('memo') or '').strip()
         image_file = request.files.get('image')
+        # [追加] 対象ユーザーの出退勤画面と同じ会館名選択肢から、この手配が
+        # どの会館のものかを指定できるようにする（任意入力。未定のまま
+        # 手配書だけ先に登録してもよい）。「その他」を選んだ場合のみ
+        # other_placeを使う（models.Time.place1/other1と同じ考え方）。
+        place = (request.form.get('place') or '').strip() or None
+        other_place = (request.form.get('other_place') or '').strip() or None
+        if place != "その他":
+            other_place = None
 
         target_user = User.query.get(int(target_user_id)) if target_user_id and target_user_id.isdigit() else None
 
@@ -152,6 +198,8 @@ def arrangement_manage():
                     existing.image_filename = image_filename
                     existing.image_data = image_data
                 existing.memo = memo or None
+                existing.place = place
+                existing.other_place = other_place
                 existing.created_by_id = current_user.id
                 existing.updated_at = now
             else:
@@ -162,6 +210,8 @@ def arrangement_manage():
                     image_filename=image_filename,
                     image_data=image_data,
                     memo=memo or None,
+                    place=place,
+                    other_place=other_place,
                     created_by_id=current_user.id,
                     created_at=now,
                     updated_at=now,
@@ -196,11 +246,15 @@ def arrangement_manage():
         .order_by(User.number, Place.id)
         .all()
     )
+    # [追加] 手配書登録フォームの会館名選択肢を、対象ユーザーの切り替えに
+    # 連動させるためのデータ（テンプレート側でJavaScriptに渡す）。
+    employee_places = _employee_places_map(employees)
 
     return render_template(
         'arrangement_manage.html',
         title="手配書登録",
         employees=employees,
+        employee_places=employee_places,
         arrangements=arrangements,
         places=places,
         error_message=error_message,

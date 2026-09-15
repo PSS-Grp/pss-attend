@@ -43,7 +43,8 @@
       }
       .arrangement-form select,
       .arrangement-form input[type="date"],
-      .arrangement-form input[type="file"] {
+      .arrangement-form input[type="file"],
+      .arrangement-form input[type="text"] {
         width: 100%;
         box-sizing: border-box;
         padding: 5px;
@@ -237,7 +238,7 @@
             <tr>
               <td class="label">対象ユーザー</td>
               <td>
-                <select name="target_user_id" required>
+                <select id="target_user_id" name="target_user_id" required>
                   <option value="" disabled selected>選択してください</option>
                   {% for e in employees %}
                   <option value="{{ e.id }}">{{ e.username }}（{{ e.number }}）</option>
@@ -257,6 +258,20 @@
               <td><input type="date" name="date" value="{{ today_str }}" required></td>
             </tr>
             <tr>
+              <!-- [追加] 対象ユーザーの出退勤画面と同じ会館名選択肢から、
+                   この手配がどの会館のものかを指定できるようにする
+                   （任意入力）。対象ユーザーを切り替えると、下のJavaScript
+                   （employee_placesを参照）で選択肢も連動して切り替わる。 -->
+              <td class="label">会館名</td>
+              <td>
+                <select id="arrangement_place_select" name="place">
+                  <option value="" selected>未定</option>
+                  <option value="その他">その他</option>
+                </select>
+                <input type="text" id="arrangement_other_place" name="other_place" placeholder="会 館 名" disabled style="margin-top:6px;">
+              </td>
+            </tr>
+            <tr>
               <!-- [修正] 会館案内図などPDFで渡されることも多いため、
                    画像に加えてPDFもアップロードできるようにした
                    （フォーム項目名(name="image")はそのまま流用）。 -->
@@ -273,6 +288,63 @@
           </p>
         </form>
 
+        <script>
+          // [追加] 対象ユーザーごとに会館名の選択肢が異なる(honso_stamp.html等と
+          // 同じ考え方)ため、サーバー側で用意した対応表(employee_places)を
+          // JavaScript側に渡し、対象ユーザーを切り替えるたびに会館名の
+          // 選択肢を作り直す。
+          var employeePlaces = {{ employee_places | tojson }};
+
+          function updateArrangementPlaceOptions() {
+            var targetSelect = document.getElementById("target_user_id");
+            var placeSelect = document.getElementById("arrangement_place_select");
+            var previousValue = placeSelect.value;
+            var places = employeePlaces[targetSelect.value] || [];
+
+            placeSelect.innerHTML = "";
+
+            var blankOption = document.createElement("option");
+            blankOption.value = "";
+            blankOption.textContent = "未定";
+            placeSelect.appendChild(blankOption);
+
+            places.forEach(function (p) {
+              var opt = document.createElement("option");
+              opt.value = p;
+              opt.textContent = p;
+              placeSelect.appendChild(opt);
+            });
+
+            var otherOption = document.createElement("option");
+            otherOption.value = "その他";
+            otherOption.textContent = "その他";
+            placeSelect.appendChild(otherOption);
+
+            // 対象ユーザーを切り替えても、同じ会館名がまだ選択肢にあれば
+            // 選び直した状態を維持する（無ければ「未定」に戻る）。
+            for (var i = 0; i < placeSelect.options.length; i++) {
+              if (placeSelect.options[i].value === previousValue) {
+                placeSelect.selectedIndex = i;
+                break;
+              }
+            }
+            toggleArrangementOtherPlace();
+          }
+
+          function toggleArrangementOtherPlace() {
+            var placeSelect = document.getElementById("arrangement_place_select");
+            var otherInput = document.getElementById("arrangement_other_place");
+            otherInput.disabled = (placeSelect.value !== "その他");
+          }
+
+          document.getElementById("target_user_id").addEventListener("change", updateArrangementPlaceOptions);
+          document.getElementById("arrangement_place_select").addEventListener("change", toggleArrangementOtherPlace);
+
+          // ページ読み込み時点でも一度反映しておく(対象ユーザー未選択の間は
+          // 「未定」「その他」のみが選択肢になる)。
+          updateArrangementPlaceOptions();
+        </script>
+
         <div class="arrangement-list">
           <h2>登録済みの手配書</h2>
 
@@ -286,6 +358,7 @@
                 <th>日付</th>
                 <th>対象ユーザー</th>
                 <th>本葬／通夜</th>
+                <th>会館名</th>
                 <th>画像／PDF</th>
                 <th>メモ</th>
                 <th></th>
@@ -297,6 +370,10 @@
                 <td>{{ a.date }}</td>
                 <td>{{ a.target_user.username if a.target_user else "" }}（{{ a.target_user.number if a.target_user else "" }}）</td>
                 <td>{{ "本葬" if a.shift == "honso" else "通夜" }}</td>
+                <!-- [追加] 「その他」が選択されていればその手入力分を、
+                     それ以外はそのまま選択された会館名を表示する
+                     （notifications._effective_placeと同じ考え方）。 -->
+                <td>{{ (a.other_place if a.place == "その他" else a.place) or "未定" }}</td>
                 <td>
                   {% if a.image_filename %}
                     {% if a.image_filename.lower().endswith('.pdf') %}

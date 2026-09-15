@@ -1275,4 +1275,109 @@ with app.app_context():
     db.session.delete(db.session.get(Place, common_place_id))
     db.session.commit()
 
+# --- [追加] 手配書登録フォームへの「会館名」選択機能の確認 ---
+
+# フォームに会館名の項目と、対象ユーザーごとの会館名一覧(JS用データ)が
+# 埋め込まれていること
+r_manage_place_field = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "会館名".encode("utf-8") in r_manage_place_field.data
+assert "arrangement_place_select".encode("utf-8") in r_manage_place_field.data
+assert "名古屋メモリアルホール".encode("utf-8") in r_manage_place_field.data  # 0002の会館名一覧がJSに含まれる
+
+# 既存の会館名(0002の「豊田会館」)を選択して手配書を登録する
+r_arr_place_existing = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_0002_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "会館名テスト（既存の会館名を選択）",
+        "place": "豊田会館",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名=豊田会館, 0002宛て・本葬) ->", r_arr_place_existing.status_code)
+assert r_arr_place_existing.status_code == 302
+
+with app.app_context():
+    arr_existing_place = Arrangement.query.filter_by(
+        target_user_id=target_0002_id, shift="honso", date=today_str
+    ).first()
+    assert arr_existing_place is not None
+    assert arr_existing_place.place == "豊田会館"
+    assert arr_existing_place.other_place is None
+    arr_existing_place_id = arr_existing_place.id
+
+# 一覧画面の会館名列に反映されていること
+r_manage_after_existing_place = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "豊田会館".encode("utf-8") in r_manage_after_existing_place.data
+
+# 対象ユーザー(0002)本人の「本日の手配書」画面にも会館名が表示されること
+r_today_0002_place = client_0002_arrangement.get("/today_arrangement", follow_redirects=False)
+assert "会館名：豊田会館".encode("utf-8") in r_today_0002_place.data
+
+# 「その他」を選択し、手入力の会館名(other_place)を指定して更新する
+# （同じ対象ユーザー・本葬・本日なので、新規作成ではなく上書きになる）
+r_arr_place_other = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_0002_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "会館名テスト（その他を選択）",
+        "place": "その他",
+        "other_place": "臨時会場（公民館）",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名=その他, 0002宛て・本葬) ->", r_arr_place_other.status_code)
+assert r_arr_place_other.status_code == 302
+
+with app.app_context():
+    arr_other_place = db.session.get(Arrangement, arr_existing_place_id)
+    assert arr_other_place.place == "その他"
+    assert arr_other_place.other_place == "臨時会場（公民館）"
+
+r_manage_after_other_place = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "臨時会場（公民館）".encode("utf-8") in r_manage_after_other_place.data
+
+r_today_0002_other_place = client_0002_arrangement.get("/today_arrangement", follow_redirects=False)
+assert "会館名：臨時会場（公民館）".encode("utf-8") in r_today_0002_other_place.data
+
+# 会館名を選ばず(「未定」のまま)登録した場合は、一覧に「未定」と表示され、
+# 「本日の手配書」画面には会館名の行自体が表示されないこと
+with app.app_context():
+    target_0003_undecided = User.query.filter_by(number="0003").first()
+    target_0003_undecided_id = target_0003_undecided.id
+
+r_arr_place_undecided = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_0003_undecided_id),
+        "shift": "tsuya",
+        "date": today_str,
+        "memo": "会館名テスト（未定のまま）",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名未指定, 0003宛て・通夜) ->", r_arr_place_undecided.status_code)
+assert r_arr_place_undecided.status_code == 302
+
+with app.app_context():
+    arr_undecided = Arrangement.query.filter_by(
+        target_user_id=target_0003_undecided_id, shift="tsuya", date=today_str
+    ).first()
+    assert arr_undecided is not None
+    assert arr_undecided.place is None
+    assert arr_undecided.other_place is None
+
+r_manage_after_undecided = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "未定".encode("utf-8") in r_manage_after_undecided.data
+
+client_0003_place = app.test_client()
+client_0003_place.post("/login", data={"login": "ログイン", "number": "0003", "password": "demo3456"})
+r_today_0003_undecided = client_0003_place.get("/today_arrangement", follow_redirects=False)
+assert "会館名テスト（未定のまま）".encode("utf-8") in r_today_0003_undecided.data
+assert "会館名：".encode("utf-8") not in r_today_0003_undecided.data
+
 print("\nALL SMOKE TESTS PASSED")

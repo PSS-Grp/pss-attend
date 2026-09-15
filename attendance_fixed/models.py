@@ -215,6 +215,13 @@ class Arrangement(db.Model):
     # PostgreSQLではbytea型として保存される）。
     image_data = db.Column(db.LargeBinary, nullable=True)
     memo = db.Column(db.Text, nullable=True)
+    # [追加] 手配者が、対象ユーザーの出退勤画面と同じ会館名選択肢の中から、
+    # その手配（本葬/通夜/日付）がどの会館で行われるかを指定できるようにする。
+    # 「その他」を選んだ場合の手入力分はother_placeに保持する
+    # （models.Timeのplace1/other1と同じ考え方）。どちらも未入力(NULL)の
+    # ままでもよい（会館が未定のまま手配書だけ先に登録するケースがあるため）。
+    place = db.Column(db.String(255), nullable=True)
+    other_place = db.Column(db.String(255), nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=True)
