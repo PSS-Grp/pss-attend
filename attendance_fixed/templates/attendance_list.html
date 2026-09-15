@@ -260,8 +260,14 @@
             <span>通夜 支給額</span>
             <span>{{ tsuya_total_amount_display }}</span>
           </div>
+          <!-- [追加] 実際に出勤した会館名(place1/place2)に応じた交通費の月合計。
+               会館名の登録（Place.transportation_fee）に基づいて算出する。 -->
+          <div class="monthly-summary-row">
+            <span>交通費</span>
+            <span>{{ transportation_total_amount_display }}</span>
+          </div>
           <div class="monthly-summary-row total">
-            <span>本葬＋通夜 支給額合計</span>
+            <span>本葬＋通夜＋交通費 支給額合計</span>
             <span>{{ combined_total_amount_display }}</span>
           </div>
         </div>

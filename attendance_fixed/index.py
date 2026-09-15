@@ -11,7 +11,7 @@ from __init__ import app ,db ,login_manager ,get_today
 from flask import Flask, request, render_template, redirect, flash, session 
 from flask_login import login_required, login_user, current_user
 
-from models import User, Time
+from models import User, Time, Place
 # from models import LoginForm, User ,
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -418,6 +418,28 @@ def _format_amount(amount):
     return "{:,}円".format(amount)
 
 
+#------------------------------------------------
+# [追加] 会館名(Place.place)に対応する交通費(Place.transportation_fee)を
+# 取得するヘルパー。勤怠一覧画面で、その日実際に出勤した会館に応じた
+# 交通費を月合計に含めるために使う。
+# ログイン中ユーザー専用に登録された会場(Place.user_id == user_id)があれば
+# それを優先し、無ければ全ユーザー共通の会場(user_id未設定)を使う。
+# 「その他」（手入力の会館名）はPlaceに事前登録されていないため、
+# 交通費は0円として扱う。一致する会館が見つからない場合も0円を返す。
+#------------------------------------------------
+def _transportation_fee_for_place(user_id, place_name):
+    if not place_name or place_name == "その他":
+        return 0
+    record = (
+        Place.query
+        .filter(Place.place == place_name)
+        .filter((Place.user_id == user_id) | (Place.user_id.is_(None)))
+        .order_by(Place.user_id.isnot(None).desc())
+        .first()
+    )
+    return record.transportation_fee if record else 0
+
+
 @app.route('/attendance_list')
 @login_required                                  #ログイン必須にしたい関数の前に記述する
 
@@ -470,6 +492,10 @@ def attendance_list():
     tsuya_total_minutes = 0
     honso_total_amount = 0
     tsuya_total_amount = 0
+    # [追加] 実際に出勤した日の会館名(place1/place2)に応じた交通費を、
+    # 本葬・通夜それぞれの実働時間が計算できた（＝出退勤とも入力済みの）
+    # 日についてのみ加算し、月の交通費合計を求める。
+    transportation_total_amount = 0
     record_rows = []
     for r in records:
         honso_minutes = _calc_work_minutes(r.start1, r.end1, break_minutes=r.break_minutes1)
@@ -484,6 +510,10 @@ def attendance_list():
             honso_total_amount += honso_amount
         if tsuya_amount:
             tsuya_total_amount += tsuya_amount
+        if honso_minutes is not None:
+            transportation_total_amount += _transportation_fee_for_place(current_user.id, r.place1)
+        if tsuya_minutes is not None:
+            transportation_total_amount += _transportation_fee_for_place(current_user.id, r.place2)
         record_rows.append({
             "date": r.date,
             "place1": r.place1,
@@ -506,7 +536,10 @@ def attendance_list():
 
     honso_total_amount_display = _format_amount(honso_total_amount)
     tsuya_total_amount_display = _format_amount(tsuya_total_amount)
-    combined_total_amount_display = _format_amount(honso_total_amount + tsuya_total_amount)
+    transportation_total_amount_display = _format_amount(transportation_total_amount)
+    combined_total_amount_display = _format_amount(
+        honso_total_amount + tsuya_total_amount + transportation_total_amount
+    )
 
     # [追加] 画面上の「前月」「次月」リンク用に、前後の年月を計算する。
     if month == 1:
@@ -541,6 +574,7 @@ def attendance_list():
                             combined_total_display=combined_total_display,
                             honso_total_amount_display=honso_total_amount_display,
                             tsuya_total_amount_display=tsuya_total_amount_display,
+                            transportation_total_amount_display=transportation_total_amount_display,
                             combined_total_amount_display=combined_total_amount_display,
                             prev_year=prev_year,
                             prev_month=prev_month,

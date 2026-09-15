@@ -4,10 +4,6 @@ import io
 import json
 import datetime
 
-# [修正] 以前はこのリポジトリを配置した場所に依存する絶対パスが
-# ハードコードされており、他の環境（他の人の手元やCIなど）で
-# git clone した直後にこのファイルをそのまま実行すると失敗していた。
-# このファイル自身の場所を基準にした相対パスに変更した（wsgi.pyと同じ方式）。
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.join(BASE_DIR, "attendance_fixed")
 sys.path.insert(0, APP_DIR)
@@ -1562,5 +1558,78 @@ with app.app_context():
     time_8005_after_noop = db.session.get(Time, time_8005_id)
     assert time_8005_after_noop.place1 == "その他"
     assert time_8005_after_noop.other1 == "変更後の会場"
+
+# --- [追加] 勤怠一覧画面(/attendance_list)の「支給額」に、会館名に応じた
+#     交通費(Place.transportation_fee)の合計が反映されることの確認 ---
+
+with app.app_context():
+    if not User.query.filter_by(number="8006").first():
+        db.session.add(User(username="テスト六郎", number="8006",
+                             password=generate_password_hash("test5678"), is_admin=False,
+                             honso_wage=1000, tsuya_wage=900))
+        db.session.commit()
+    target_8006 = User.query.filter_by(number="8006").first()
+    target_8006_id = target_8006.id
+
+# 8006用に、交通費ありの会館(本葬用700円・通夜用300円)と、交通費未設定
+# （0円のまま）の会館を1件ずつ登録しておく
+client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "form_type": "place", "place_target_user_id": str(target_8006_id),
+        "place_name": "六郎会館（本葬）", "transportation_fee": "700",
+    },
+    follow_redirects=False,
+)
+client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "form_type": "place", "place_target_user_id": str(target_8006_id),
+        "place_name": "六郎会館（通夜）", "transportation_fee": "300",
+    },
+    follow_redirects=False,
+)
+
+client_8006 = app.test_client()
+client_8006.post("/login", data={"login": "ログイン", "number": "8006", "password": "test5678"})
+
+# 本葬：交通費が登録された会館で、出退勤とも入力（実働時間が計算できる状態）
+client_8006.post("/honso_stamp", data={"place1": "六郎会館（本葬）", "start1": "09:00"})
+client_8006.post("/honso_modify", data={"end1": "18:00"})
+
+# 通夜：交通費が登録された別の会館で、出退勤とも入力
+client_8006.post("/tsuya_stamp", data={"place2": "六郎会館（通夜）", "start2": "19:00"})
+client_8006.post("/tsuya_modify", data={"end2": "21:00"})
+
+r_attendance_8006 = client_8006.get("/attendance_list", follow_redirects=False)
+print("GET /attendance_list (8006, 会館名に応じた交通費の合計確認) ->", r_attendance_8006.status_code)
+assert r_attendance_8006.status_code == 200
+# 本葬支給額: 1000円 x 9時間 = 9,000円 / 通夜支給額: 900円 x 2時間 = 1,800円
+assert "9,000円".encode("utf-8") in r_attendance_8006.data
+assert "1,800円".encode("utf-8") in r_attendance_8006.data
+# 交通費合計: 700円 + 300円 = 1,000円
+assert "交通費".encode("utf-8") in r_attendance_8006.data
+assert "1,000円".encode("utf-8") in r_attendance_8006.data
+# 支給額合計（本葬9,000円 + 通夜1,800円 + 交通費1,000円）= 11,800円
+assert "本葬＋通夜＋交通費 支給額合計".encode("utf-8") in r_attendance_8006.data
+assert "11,800円".encode("utf-8") in r_attendance_8006.data
+
+# 「その他」（手入力の会館名、Placeに未登録）を選んで出退勤した日は、
+# 交通費が0円として扱われる（エラーにならず、合計に加算されない）ことを確認
+with app.app_context():
+    # 前日の日付で、交通費対象外の記録を1件作っておく
+    yesterday_str = (today - datetime.timedelta(days=1)).isoformat()
+    db.session.add(Time(
+        date=yesterday_str, number="8006",
+        place1="その他", other1="8006手入力の会場", start1="10:00", end1="15:00",
+    ))
+    db.session.commit()
+
+r_attendance_8006_after = client_8006.get("/attendance_list", follow_redirects=False)
+print("GET /attendance_list (8006, その他会場は交通費0円のまま) ->", r_attendance_8006_after.status_code)
+assert r_attendance_8006_after.status_code == 200
+# 前日分の本葬支給額(1000円 x 5時間 = 5,000円)が加算されても、
+# 交通費の合計は引き続き1,000円のまま（「その他」分は加算されない）
+assert "1,000円".encode("utf-8") in r_attendance_8006_after.data
 
 print("\nALL SMOKE TESTS PASSED")
