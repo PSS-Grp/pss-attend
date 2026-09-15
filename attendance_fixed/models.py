@@ -175,6 +175,11 @@ class Place(db.Model):
     area = db.Column(db.String(100))
     place = db.Column(db.String(100), nullable=False)
     other = db.Column(db.String(100))
+    # [追加] 会館ごとの交通費（円単位の整数）。会館によって従業員の自宅等
+    # からの距離が異なり、交通費も変わりうるため、従業員個人ではなく
+    # 会館(Place)側に持たせる。honso_wage/tsuya_wageと同様、未設定の
+    # 場合は0円として扱う。
+    transportation_fee = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     user = db.relationship("User", backref=db.backref("places", lazy="dynamic"))
 

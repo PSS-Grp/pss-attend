@@ -178,7 +178,8 @@
         white-space: nowrap;
       }
       .place-form select,
-      .place-form input[type="text"] {
+      .place-form input[type="text"],
+      .place-form input[type="number"] {
         width: 100%;
         box-sizing: border-box;
         padding: 5px;
@@ -430,6 +431,11 @@
                 <td class="label">会館名</td>
                 <td><input type="text" name="place_name" maxlength="100" placeholder="例：愛知葬祭 春日井会場" required></td>
               </tr>
+              <tr>
+                <!-- [追加] 会館ごとの交通費。未入力の場合は0円として登録される。 -->
+                <td class="label">交通費</td>
+                <td><input type="number" name="transportation_fee" min="0" step="1" placeholder="円"></td>
+              </tr>
             </table>
             <p class="submit-row">
               <button type="submit">登録する</button>
@@ -446,6 +452,7 @@
                 <tr>
                   <th>対象ユーザー</th>
                   <th>会館名</th>
+                  <th>交通費</th>
                   <th></th>
                 </tr>
               </thead>
@@ -454,6 +461,7 @@
                 <tr>
                   <td>{{ p.user.username if p.user else "" }}（{{ p.user.number if p.user else "" }}）</td>
                   <td>{{ p.place }}</td>
+                  <td>{{ "{:,}円".format(p.transportation_fee or 0) }}</td>
                   <td>
                     <form method="POST" action="{{ url_for('arrangement_place_delete', place_id=p.id) }}" onsubmit="return confirm('この会館名を削除しますか？');">
                       <button type="submit" class="delete-button">削除</button>

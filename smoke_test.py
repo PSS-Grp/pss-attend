@@ -283,6 +283,10 @@ with app.app_context():
 r12 = client_admin.get("/admin/place/", follow_redirects=False)
 print("GET /admin/place/ (管理者でログイン済み) ->", r12.status_code)
 assert r12.status_code == 200
+# [追加] 会館(Place)に追加したtransportation_fee列が、Flask-Adminの
+# 一覧画面にも自動的に表示されること（列名はスネークケースから
+# タイトルケースに自動変換される。Break Minutes1と同じ挙動）。
+assert "Transportation Fee".encode("utf-8") in r12.data
 
 # --- [追加] 管理画面(/admin/user/)からのパスワードのハッシュ化を確認 ---
 # 以前は管理画面のUser編集/新規作成フォームがpasswordカラムをそのまま
@@ -1204,11 +1208,60 @@ with app.app_context():
     created_place = Place.query.filter_by(user_id=target_0002_id, place="テスト葬祭 桜ヶ丘会場").first()
     assert created_place is not None
     created_place_id = created_place.id
+    # [追加] 交通費を入力しなかった場合は0円として登録されること
+    assert created_place.transportation_fee == 0
 
 # 一覧画面に、登録した会館名と対象ユーザー名が表示されること
 r_manage_after_place = client_arranger.get("/arrangement_manage", follow_redirects=False)
 assert "テスト葬祭 桜ヶ丘会場".encode("utf-8") in r_manage_after_place.data
 assert "デモ次郎".encode("utf-8") in r_manage_after_place.data
+# [追加] 交通費0円の会館名も一覧に「0円」と表示されること
+assert "0円".encode("utf-8") in r_manage_after_place.data
+
+# [追加] 交通費を指定して会館名を登録した場合、その金額が保存され、
+# 一覧にも「○○円」の形式で表示されること
+r_place_create_with_fee = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "form_type": "place",
+        "place_target_user_id": str(target_0002_id),
+        "place_name": "テスト葬祭 交通費あり会場",
+        "transportation_fee": "1500",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名登録, 交通費1500円) ->", r_place_create_with_fee.status_code)
+assert r_place_create_with_fee.status_code == 302
+
+with app.app_context():
+    created_place_with_fee = Place.query.filter_by(
+        user_id=target_0002_id, place="テスト葬祭 交通費あり会場"
+    ).first()
+    assert created_place_with_fee is not None
+    assert created_place_with_fee.transportation_fee == 1500
+
+r_manage_after_place_fee = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "テスト葬祭 交通費あり会場".encode("utf-8") in r_manage_after_place_fee.data
+assert "1,500円".encode("utf-8") in r_manage_after_place_fee.data
+
+# 負の値やおかしな値を入力しても0円として扱われ、エラーにはならないこと
+r_place_create_bad_fee = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "form_type": "place",
+        "place_target_user_id": str(target_0002_id),
+        "place_name": "テスト葬祭 不正交通費会場",
+        "transportation_fee": "-500",
+    },
+    follow_redirects=False,
+)
+assert r_place_create_bad_fee.status_code == 302
+with app.app_context():
+    created_place_bad_fee = Place.query.filter_by(
+        user_id=target_0002_id, place="テスト葬祭 不正交通費会場"
+    ).first()
+    assert created_place_bad_fee is not None
+    assert created_place_bad_fee.transportation_fee == 0
 
 # 登録した会館名が、対象ユーザー(0002)本人の出退勤画面の会館名選択肢にも
 # 反映されていること(honso.get_places_for_current_user経由)を確認

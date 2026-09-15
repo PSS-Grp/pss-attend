@@ -177,6 +177,15 @@ def arrangement_manage():
         # 会館名(models.Place)を、手配者アカウントからも登録できるようにする。
         place_target_user_id = request.form.get('place_target_user_id')
         place_name = (request.form.get('place_name') or '').strip()
+        # [追加] 会館ごとの交通費（円）。未入力・数値として解釈できない場合は
+        # 0円として扱う（honso_wage/tsuya_wage等と同じ考え方）。
+        transportation_fee_raw = request.form.get('transportation_fee')
+        try:
+            transportation_fee = int(transportation_fee_raw) if transportation_fee_raw else 0
+        except ValueError:
+            transportation_fee = 0
+        if transportation_fee < 0:
+            transportation_fee = 0
 
         place_target_user = (
             User.query.get(int(place_target_user_id))
@@ -188,7 +197,11 @@ def arrangement_manage():
         elif not place_name:
             place_error_message = "会館名を入力してください。"
         else:
-            db.session.add(Place(user_id=place_target_user.id, place=place_name))
+            db.session.add(Place(
+                user_id=place_target_user.id,
+                place=place_name,
+                transportation_fee=transportation_fee,
+            ))
             db.session.commit()
             return redirect(url_for('arrangement_manage'))
 
