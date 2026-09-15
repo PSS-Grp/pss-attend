@@ -37,6 +37,19 @@ import requests
 
 RESEND_API_URL = "https://api.resend.com/emails"
 
+# [追加] メール本文の「クリック日時」がJST（日本時間）で表示されるようにする
+# ためのタイムゾーン定義。
+#
+# 従来は `datetime.datetime.now()`（タイムゾーン情報を持たない、サーバーの
+# ローカル時刻）をそのまま使っていたが、Render上のコンテナはOSの時刻設定が
+# UTC（＝GMT相当）になっているため、実際の日本時間より9時間遅い時刻が
+# メール本文に表示されてしまっていた。
+# サーバーの設定に依存せず常に正しく変換されるよう、`datetime.timezone`で
+# 固定のUTC+9オフセットを明示的に指定する（日本時間には夏時間が無いため、
+# 標準ライブラリの`zoneinfo`が提供するtzデータベースを使わなくても、この
+# 固定オフセットだけで正確に変換できる）。
+JST = datetime.timezone(datetime.timedelta(hours=9), name="JST")
+
 
 #------------------------------------------------
 # [追加] 会館名の表示用ヘルパー。「その他」が選択されていた場合は、
@@ -98,7 +111,9 @@ def send_attendance_notification(shift_label, user_name, number, place, other,
     action_label = "退勤" if is_checkout else "出勤"
     subject = "【{}】{} {}".format(action_label, user_name, effective_place)
 
-    clicked_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # [修正] サーバーのタイムゾーン設定に関わらず日本時間で表示されるよう、
+    # 上で定義した固定のJSTオフセットに変換する。
+    clicked_at = datetime.datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S")
     body = "\n".join([
         "登録ボタンがクリックされました。",
         "",

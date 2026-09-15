@@ -2,6 +2,7 @@ import sys
 import os
 import io
 import json
+import re
 import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -842,6 +843,26 @@ try:
     assert "退勤時間: 未入力" in body
     assert "休憩時間: なし" in body
     assert _sent_requests[0]["headers"]["Authorization"] == "Bearer re_dummy_api_key"
+
+    # [追加] メール本文の「クリック日時」が、サーバーのタイムゾーン設定に
+    # 関わらず日本時間(JST=UTC+9)で表示されることの確認。
+    # このテスト実行環境自体がUTCで動いている（=以前の実装のバグを
+    # 再現できる）ことを利用し、素朴な`datetime.datetime.now()`
+    # （サーバーのローカル時刻、このテスト環境ではUTC）とは一致せず、
+    # 明示的にJSTへ変換した時刻と一致することを確認する。
+    clicked_match = re.search(r"クリック日時: (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", body)
+    assert clicked_match, "クリック日時が本文に見つかりません"
+    clicked_dt = datetime.datetime.strptime(clicked_match.group(1), "%Y-%m-%d %H:%M:%S")
+    expected_jst_now = datetime.datetime.now(notifications.JST).replace(tzinfo=None)
+    assert abs((clicked_dt - expected_jst_now).total_seconds()) < 60, (
+        "クリック日時がJSTになっていません: {} (期待値の目安: {})".format(
+            clicked_dt, expected_jst_now
+        )
+    )
+    # サーバーのローカル時刻（このテスト環境ではUTC）とは9時間ずれている
+    # はず（=単純に datetime.datetime.now() を使っていないことの確認）。
+    naive_server_now = datetime.datetime.now()
+    assert abs((clicked_dt - naive_server_now).total_seconds() - 9 * 3600) < 60
 
     # 退勤まで入力・休憩あり・「その他」の会館 -> 件名は【退勤】、
     # 会館名は手入力されたother側が使われる
