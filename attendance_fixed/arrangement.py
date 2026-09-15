@@ -33,7 +33,7 @@ from flask import (
 )
 from flask_login import login_required, current_user
 
-from models import User, Arrangement
+from models import User, Arrangement, Place
 from sqlalchemy.exc import IntegrityError
 
 
@@ -89,8 +89,32 @@ def arranger_required(view_func):
 def arrangement_manage():
 
     error_message = None
+    # [追加] 会館名(Place)登録フォーム用のエラーメッセージ。手配書登録フォーム
+    # とは別のフォームなので、エラーメッセージも分けて持つ。
+    place_error_message = None
 
-    if request.method == 'POST':
+    if request.method == 'POST' and request.form.get('form_type') == 'place':
+        # [追加] 「会館名の登録」フォーム（手配者が特定の従業員向けの会館名を
+        # 追加する）。従来は管理画面(/admin/place/)からしか登録できなかった
+        # 会館名(models.Place)を、手配者アカウントからも登録できるようにする。
+        place_target_user_id = request.form.get('place_target_user_id')
+        place_name = (request.form.get('place_name') or '').strip()
+
+        place_target_user = (
+            User.query.get(int(place_target_user_id))
+            if place_target_user_id and place_target_user_id.isdigit() else None
+        )
+
+        if not place_target_user:
+            place_error_message = "会館名を登録する対象ユーザーを選択してください。"
+        elif not place_name:
+            place_error_message = "会館名を入力してください。"
+        else:
+            db.session.add(Place(user_id=place_target_user.id, place=place_name))
+            db.session.commit()
+            return redirect(url_for('arrangement_manage'))
+
+    elif request.method == 'POST':
         target_user_id = request.form.get('target_user_id')
         shift = request.form.get('shift')
         date_str = request.form.get('date')
@@ -162,13 +186,25 @@ def arrangement_manage():
         .order_by(Arrangement.date.desc(), Arrangement.id.desc())
         .all()
     )
+    # [追加] ユーザーごとに登録された会館名(Place)の一覧。全員共通
+    # (user_id が未設定)の行は、このページからは追加・削除できない
+    # （引き続き管理画面(/admin/place/)でのみ扱う）ため、一覧にも含めない。
+    places = (
+        Place.query
+        .filter(Place.user_id.isnot(None))
+        .join(User, Place.user_id == User.id)
+        .order_by(User.number, Place.id)
+        .all()
+    )
 
     return render_template(
         'arrangement_manage.html',
         title="手配書登録",
         employees=employees,
         arrangements=arrangements,
+        places=places,
         error_message=error_message,
+        place_error_message=place_error_message,
         today_str=get_today(),
     )
 
@@ -182,6 +218,24 @@ def arrangement_manage():
 def arrangement_delete(arrangement_id):
     record = Arrangement.query.get(arrangement_id)
     if record:
+        db.session.delete(record)
+        db.session.commit()
+    return redirect(url_for('arrangement_manage'))
+
+
+#------------------------------------------------
+# [追加] 手配者が登録した会館名(Place)の削除。
+# 全員共通(user_id が未設定)の会館名は、このページの一覧にそもそも
+# 表示していない（登録時と同じく、手配者が扱えるのは特定ユーザー向けの
+# 会館名だけ）ため、削除でも念のため user_id が設定されている行のみを
+# 対象にする。
+#------------------------------------------------
+@app.route('/arrangement_place_delete/<int:place_id>', methods=["POST"])
+@login_required
+@arranger_required
+def arrangement_place_delete(place_id):
+    record = Place.query.get(place_id)
+    if record and record.user_id is not None:
         db.session.delete(record)
         db.session.commit()
     return redirect(url_for('arrangement_manage'))

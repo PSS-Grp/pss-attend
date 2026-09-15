@@ -15,7 +15,7 @@ os.chdir(APP_DIR)
 
 import index  # noqa: E402  registers all routes (login, judge, select, honso, tsuya...)
 from index import app, db  # noqa: E402
-from models import User, Time, Arrangement  # noqa: E402
+from models import User, Time, Arrangement, Place  # noqa: E402
 import honso  # noqa: E402
 import tsuya  # noqa: E402
 import notifications  # noqa: E402
@@ -1176,5 +1176,103 @@ assert r_img_after_delete.status_code == 404
 r_admin_arrangement = client_admin.get("/admin/arrangement/", follow_redirects=False)
 print("GET /admin/arrangement/ (管理者) ->", r_admin_arrangement.status_code)
 assert r_admin_arrangement.status_code == 200
+
+# --- [追加] 手配者画面からの「会館名」登録機能の確認 ---
+
+# 手配書登録画面に「会館名の登録」フォームが表示されていること
+assert "会館名の登録".encode("utf-8") in r_manage_get.data
+
+# 0002宛てに新しい会館名を登録する
+r_place_create = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "form_type": "place",
+        "place_target_user_id": str(target_0002_id),
+        "place_name": "テスト葬祭 桜ヶ丘会場",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名登録, 0002宛て) ->", r_place_create.status_code, r_place_create.headers.get("Location"))
+assert r_place_create.status_code == 302
+assert r_place_create.headers.get("Location") == "/arrangement_manage"
+
+with app.app_context():
+    created_place = Place.query.filter_by(user_id=target_0002_id, place="テスト葬祭 桜ヶ丘会場").first()
+    assert created_place is not None
+    created_place_id = created_place.id
+
+# 一覧画面に、登録した会館名と対象ユーザー名が表示されること
+r_manage_after_place = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "テスト葬祭 桜ヶ丘会場".encode("utf-8") in r_manage_after_place.data
+assert "デモ次郎".encode("utf-8") in r_manage_after_place.data
+
+# 登録した会館名が、対象ユーザー(0002)本人の出退勤画面の会館名選択肢にも
+# 反映されていること(honso.get_places_for_current_user経由)を確認
+r_honso_0002 = client_0002_arrangement.get("/honso_stamp", follow_redirects=False)
+print("GET /honso_stamp (0002, 新しい会館名の確認) ->", r_honso_0002.status_code)
+assert "テスト葬祭 桜ヶ丘会場".encode("utf-8") in r_honso_0002.data
+
+# 対象ユーザー・会館名が未入力の場合はエラーになり、登録されないこと
+r_place_invalid = client_arranger.post(
+    "/arrangement_manage",
+    data={"form_type": "place", "place_target_user_id": "", "place_name": ""},
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名登録, 未入力) ->", r_place_invalid.status_code)
+assert r_place_invalid.status_code == 200
+assert "対象ユーザーを選択してください".encode("utf-8") in r_place_invalid.data
+
+r_place_invalid2 = client_arranger.post(
+    "/arrangement_manage",
+    data={"form_type": "place", "place_target_user_id": str(target_0002_id), "place_name": "   "},
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名登録, 会館名未入力) ->", r_place_invalid2.status_code)
+assert r_place_invalid2.status_code == 200
+assert "会館名を入力してください".encode("utf-8") in r_place_invalid2.data
+
+# 一般従業員・未ログインは会館名の登録・削除ができないこと
+r_emp_place_create = client_employee.post(
+    "/arrangement_manage",
+    data={"form_type": "place", "place_target_user_id": str(target_0002_id), "place_name": "不正登録テスト"},
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (会館名登録, 一般従業員) ->", r_emp_place_create.status_code, r_emp_place_create.headers.get("Location"))
+assert r_emp_place_create.status_code == 302
+assert "/login" in r_emp_place_create.headers.get("Location", "")
+
+r_anon_place_delete = client_anon.post(f"/arrangement_place_delete/{created_place_id}", follow_redirects=False)
+print("POST /arrangement_place_delete (未ログイン) ->", r_anon_place_delete.status_code, r_anon_place_delete.headers.get("Location"))
+assert r_anon_place_delete.status_code == 302
+assert "/login" in r_anon_place_delete.headers.get("Location", "")
+with app.app_context():
+    assert db.session.get(Place, created_place_id) is not None  # 削除されていないこと
+
+# 手配者による会館名の削除
+r_place_delete = client_arranger.post(f"/arrangement_place_delete/{created_place_id}", follow_redirects=False)
+print("POST /arrangement_place_delete (手配者) ->", r_place_delete.status_code, r_place_delete.headers.get("Location"))
+assert r_place_delete.status_code == 302
+with app.app_context():
+    assert db.session.get(Place, created_place_id) is None
+
+# 全員共通(user_id未設定)の会館名は、このページの一覧には表示されず、
+# このルートからは削除できないことを確認
+with app.app_context():
+    common_place = Place(user_id=None, place="共通会館テスト")
+    db.session.add(common_place)
+    db.session.commit()
+    common_place_id = common_place.id
+
+r_manage_common_check = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "共通会館テスト".encode("utf-8") not in r_manage_common_check.data
+
+r_common_delete_attempt = client_arranger.post(f"/arrangement_place_delete/{common_place_id}", follow_redirects=False)
+print("POST /arrangement_place_delete (全員共通の会館名) ->", r_common_delete_attempt.status_code)
+assert r_common_delete_attempt.status_code == 302
+with app.app_context():
+    assert db.session.get(Place, common_place_id) is not None  # 削除されず残っていること
+    # 後片付け
+    db.session.delete(db.session.get(Place, common_place_id))
+    db.session.commit()
 
 print("\nALL SMOKE TESTS PASSED")

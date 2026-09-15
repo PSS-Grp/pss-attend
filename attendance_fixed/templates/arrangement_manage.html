@@ -150,6 +150,76 @@
         text-align: center;
         margin: 20px 0;
       }
+      /* [追加] 「会館名の登録」フォーム・一覧用のスタイル。手配書登録
+           フォームとは見た目で区別できるよう、上に区切り線を入れる。 */
+      .place-section {
+        margin-top: 30px;
+        padding-top: 22px;
+        border-top: 2px solid #cfeaf0;
+      }
+      .place-form {
+        margin-bottom: 22px;
+        padding-bottom: 18px;
+        border-bottom: 1px dashed #cfeaf0;
+      }
+      .place-form table {
+        width: 100%;
+      }
+      .place-form td {
+        padding: 6px 4px;
+        vertical-align: top;
+      }
+      .place-form td.label {
+        width: 110px;
+        color: #077685;
+        font-weight: bold;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .place-form select,
+      .place-form input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 5px;
+        font-size: 14px;
+      }
+      .place-form .submit-row {
+        text-align: right;
+        margin-top: 10px;
+      }
+      .place-form button {
+        font-family: Arial;
+        color: #ffffff;
+        font-size: 15px;
+        padding: 8px 22px;
+        border: none;
+        border-radius: 16px;
+        background: #418da8;
+        cursor: pointer;
+      }
+      .place-form button:hover {
+        background: #37a4bf;
+      }
+      .place-table {
+        width: 100%;
+        min-width: 320px;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .place-table th,
+      .place-table td {
+        border: 1px solid #cfeaf0;
+        padding: 6px 8px;
+        text-align: center;
+        vertical-align: middle;
+      }
+      .place-table thead th {
+        background: #4eb4c2;
+        color: #ffffff;
+      }
+      .place-table tbody tr:nth-child(even) {
+        background: #f3fbfc;
+      }
     </style>
   </head>
 
@@ -253,6 +323,74 @@
           {% else %}
           <p class="no-arrangements">登録済みの手配書はまだありません。</p>
           {% endif %}
+        </div>
+
+        <!-- [追加] 会館名の登録。従来は管理画面(/admin/place/)からしか
+             登録できなかった、出退勤画面の「会館名」選択肢(models.Place)を、
+             手配者アカウントからも登録できるようにした。 -->
+        <div class="place-section">
+          <p class="frame-title" style="font-size:16px;">会館名の登録</p>
+
+          {% if place_error_message %}
+          <p class="error-message">{{ place_error_message }}</p>
+          {% endif %}
+
+          <form class="place-form" method="POST" action="{{ url_for('arrangement_manage') }}">
+            <input type="hidden" name="form_type" value="place">
+            <table>
+              <tr>
+                <td class="label">対象ユーザー</td>
+                <td>
+                  <select name="place_target_user_id" required>
+                    <option value="" disabled selected>選択してください</option>
+                    {% for e in employees %}
+                    <option value="{{ e.id }}">{{ e.username }}（{{ e.number }}）</option>
+                    {% endfor %}
+                  </select>
+                </td>
+              </tr>
+              <tr>
+                <td class="label">会館名</td>
+                <td><input type="text" name="place_name" maxlength="100" placeholder="例：愛知葬祭 春日井会場" required></td>
+              </tr>
+            </table>
+            <p class="submit-row">
+              <button type="submit">登録する</button>
+            </p>
+          </form>
+
+          <div class="arrangement-list">
+            <h2>登録済みの会館名（ユーザー別）</h2>
+
+            {% if places %}
+            <div class="table-scroll">
+            <table class="place-table">
+              <thead>
+                <tr>
+                  <th>対象ユーザー</th>
+                  <th>会館名</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for p in places %}
+                <tr>
+                  <td>{{ p.user.username if p.user else "" }}（{{ p.user.number if p.user else "" }}）</td>
+                  <td>{{ p.place }}</td>
+                  <td>
+                    <form method="POST" action="{{ url_for('arrangement_place_delete', place_id=p.id) }}" onsubmit="return confirm('この会館名を削除しますか？');">
+                      <button type="submit" class="delete-button">削除</button>
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            </div>
+            {% else %}
+            <p class="no-arrangements">ユーザー別に登録された会館名はまだありません。</p>
+            {% endif %}
+          </div>
         </div>
       </div>
 
