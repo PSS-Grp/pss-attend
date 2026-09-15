@@ -1611,7 +1611,7 @@ assert "1,800円".encode("utf-8") in r_attendance_8006.data
 assert "交通費".encode("utf-8") in r_attendance_8006.data
 assert "1,000円".encode("utf-8") in r_attendance_8006.data
 # 支給額合計（本葬9,000円 + 通夜1,800円 + 交通費1,000円）= 11,800円
-assert "本葬＋通夜＋交通費 支給額合計".encode("utf-8") in r_attendance_8006.data
+assert "支給額合計".encode("utf-8") in r_attendance_8006.data
 assert "11,800円".encode("utf-8") in r_attendance_8006.data
 
 # 「その他」（手入力の会館名、Placeに未登録）を選んで出退勤した日は、
@@ -1820,5 +1820,25 @@ with app.app_context():
     time_8007_tsuya = Time.query.filter_by(number="8007", date=today_str).first()
     assert time_8007_tsuya.id == time_8007_id
     assert time_8007_tsuya.wait_amount2 is None
+
+# --- [追加] 勤怠一覧画面(/attendance_list)の支給額に、「手当」（リーダー・
+#     高速道路・特別手当等）の月合計が、交通費の下に表示されることの確認 ---
+r_attendance_8007 = client_8007.get("/attendance_list", follow_redirects=False)
+print("GET /attendance_list (8007, 手当の月合計確認) ->", r_attendance_8007.status_code)
+assert r_attendance_8007.status_code == 200
+# リーダー500円・高速道路1,000円・特別手当300円が、それぞれ項目名と
+# 金額付きで表示されること
+assert "リーダー".encode("utf-8") in r_attendance_8007.data
+assert "500円".encode("utf-8") in r_attendance_8007.data
+assert "高速道路".encode("utf-8") in r_attendance_8007.data
+assert "1,000円".encode("utf-8") in r_attendance_8007.data
+assert "特別手当".encode("utf-8") in r_attendance_8007.data
+assert "300円".encode("utf-8") in r_attendance_8007.data
+# 金額が設定されていない項目（サブリーダー等）は表示されない
+assert "サブリーダー".encode("utf-8") not in r_attendance_8007.data
+# 支給額合計に、手当の月合計(500+1000+300=1,800円)も含まれること
+# （8007は時給未設定のため本葬・通夜の支給額は0円、七郎会館の交通費も0円）
+assert "1,800円".encode("utf-8") in r_attendance_8007.data
+assert "支給額合計".encode("utf-8") in r_attendance_8007.data
 
 print("\nALL SMOKE TESTS PASSED")

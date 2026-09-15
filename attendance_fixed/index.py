@@ -20,6 +20,9 @@ from honso import honso_modify, honso_stamp
 # [追加] 「本日の手配書」機能（手配者専用の登録画面 /arrangement_manage と、
 # 一般ユーザー用の表示画面 /today_arrangement）のルートを読み込む。
 import arrangement  # noqa: F401
+# [追加] 勤怠一覧画面の支給額に、「手当」（リーダー・高速道路等）の月合計を
+# 表示するためのヘルパー（allowances.py参照）。
+from allowances import sum_allowance_amounts, allowance_totals_display_items
 
 
 
@@ -537,8 +540,16 @@ def attendance_list():
     honso_total_amount_display = _format_amount(honso_total_amount)
     tsuya_total_amount_display = _format_amount(tsuya_total_amount)
     transportation_total_amount_display = _format_amount(transportation_total_amount)
+
+    # [追加] 手配者が手配書登録画面で設定した「手当」（リーダー・高速道路等、
+    # 休憩以外の項目）の月合計。項目ごとに金額が設定されている（0円より
+    # 大きい）ものだけを、交通費の下に表示する。
+    allowance_totals = sum_allowance_amounts(records)
+    allowance_display_totals = allowance_totals_display_items(allowance_totals)
+    allowance_total_amount = sum(allowance_totals.values())
+
     combined_total_amount_display = _format_amount(
-        honso_total_amount + tsuya_total_amount + transportation_total_amount
+        honso_total_amount + tsuya_total_amount + transportation_total_amount + allowance_total_amount
     )
 
     # [追加] 画面上の「前月」「次月」リンク用に、前後の年月を計算する。
@@ -575,6 +586,7 @@ def attendance_list():
                             honso_total_amount_display=honso_total_amount_display,
                             tsuya_total_amount_display=tsuya_total_amount_display,
                             transportation_total_amount_display=transportation_total_amount_display,
+                            allowance_display_totals=allowance_display_totals,
                             combined_total_amount_display=combined_total_amount_display,
                             prev_year=prev_year,
                             prev_month=prev_month,

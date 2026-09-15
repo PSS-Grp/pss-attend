@@ -266,8 +266,17 @@
             <span>交通費</span>
             <span>{{ transportation_total_amount_display }}</span>
           </div>
+          <!-- [追加] 手配者が手配書登録画面で設定した「手当」（リーダー・
+               高速道路等、休憩以外の項目）の月合計。金額が設定されている
+               項目だけを、交通費の下に表示する（無ければ何も表示しない）。 -->
+          {% for item in allowance_display_totals %}
+          <div class="monthly-summary-row">
+            <span>{{ item.label }}</span>
+            <span>{{ "{:,}".format(item.amount) }}円</span>
+          </div>
+          {% endfor %}
           <div class="monthly-summary-row total">
-            <span>本葬＋通夜＋交通費 支給額合計</span>
+            <span>支給額合計</span>
             <span>{{ combined_total_amount_display }}</span>
           </div>
         </div>

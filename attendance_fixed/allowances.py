@@ -94,3 +94,45 @@ def allowance_display_items(record, shift):
             items.append({"label": ALLOWANCE_LABELS["highway"], "amount": highway_amount})
 
     return items
+
+
+#------------------------------------------------
+# [追加] 複数のTimeレコード（勤怠一覧画面で表示している月分など）から、
+# 「手当」項目ごとの合計金額を集計する。本葬側(_amount1・express1)・
+# 通夜側(_amount2・express2)は、同じ項目（例：リーダー）としてまとめて
+# 合算する。
+# 戻り値は {"leader": 1500, "subleader": 0, ..., "highway": 800} の形式
+# （ALLOWANCE_ITEMSの各項目＋"highway"を必ず含み、該当が無い項目は0）。
+#------------------------------------------------
+def sum_allowance_amounts(records):
+    totals = {item: 0 for item in ALLOWANCE_ITEMS}
+    totals["highway"] = 0
+    for record in records:
+        for item in ALLOWANCE_ITEMS:
+            amount1 = getattr(record, "{}_amount1".format(item), None)
+            amount2 = getattr(record, "{}_amount2".format(item), None)
+            if amount1:
+                totals[item] += amount1
+            if amount2:
+                totals[item] += amount2
+        for express in (record.express1, record.express2):
+            if express not in (None, ""):
+                try:
+                    totals["highway"] += int(express)
+                except (TypeError, ValueError):
+                    pass
+    return totals
+
+
+#------------------------------------------------
+# [追加] sum_allowance_amountsの集計結果から、金額が0より大きい項目だけを
+# 表示用のリストに変換する。戻り値は[{"label": "リーダー", "amount": 1500}, ...]
+# の形式（ALLOWANCE_ITEMS→"highway"の順で、金額が0の項目は含めない）。
+#------------------------------------------------
+def allowance_totals_display_items(totals):
+    items = []
+    for item in ALLOWANCE_ITEMS + ["highway"]:
+        amount = totals.get(item) or 0
+        if amount > 0:
+            items.append({"label": ALLOWANCE_LABELS[item], "amount": amount})
+    return items
