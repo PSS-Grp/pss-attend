@@ -34,7 +34,7 @@ from flask import (
 from flask_login import login_required, current_user
 
 from models import User, Arrangement, Place, Time
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 # [追加] 「手当」欄（休憩以外）に関する共通定義・ヘルパー（honso.py/tsuya.py
 # と共有するため、allowances.pyに切り出している）。
 from allowances import ALLOWANCE_ITEMS, ALLOWANCE_LABELS, parse_allowance_amounts
@@ -169,6 +169,15 @@ def _apply_arrangement_to_time_record(number, shift, date_str, place, other_plac
         # 抵触することがある。その場合は従業員本人の打刻データを
         # 優先し、手配者側の会館名設定は反映しない（エラー画面は
         # 出さず、手配書自体の登録は成功させる）。
+        # [修正] 原因調査をしやすくするため、握りつぶす前に必ずログへ
+        # 記録する（Renderの Logs タブで確認できる）。
+        app.logger.exception("手配書→勤怠(Time)への反映に失敗しました（一意制約違反のため無視）")
+        db.session.rollback()
+    except SQLAlchemyError:
+        # [追加] 想定していない種類のDBエラー（列不足やデータ型不一致など）
+        # も、ここで握りつぶさずログに残した上でロールバックする。
+        # 手配書(Arrangement)自体は既に保存済みのため、エラー画面は出さない。
+        app.logger.exception("手配書→勤怠(Time)への反映に失敗しました")
         db.session.rollback()
 
 
@@ -319,26 +328,50 @@ def arrangement_manage():
                     updated_at=now,
                 ))
 
+            # [修正] 以前はここでIntegrityError等が起きても画面には何も
+            # 表示せず一覧画面へリダイレクトしていたため、実際には保存に
+            # 失敗していても「登録できたように見えて一覧に増えない」という
+            # 分かりにくい状態になっていた（原因調査時に判明）。
+            # 保存が失敗した場合は必ずログに記録した上で、リダイレクトせず
+            # エラーメッセージ付きで登録画面を再表示するようにした。
+            save_succeeded = True
             try:
                 db.session.commit()
             except IntegrityError:
                 # [追加] Arrangement(target_user_id, shift, date)にはDBの
                 # 一意制約がある（models.py参照）。複数の手配者が同時に
                 # 同じ対象者・本葬/通夜・日付の手配書を新規登録しようと
-                # した場合など、ごく稀にここで衝突することがあるが、
-                # エラー画面を出さずに登録済み一覧の画面に戻す
-                # （どちらか一方の内容が保存されている状態になる）。
+                # した場合など、ごく稀にここで衝突することがある。
                 db.session.rollback()
+                app.logger.exception("手配書の保存に失敗しました（一意制約違反）")
+                error_message = (
+                    "同じ内容の手配書が別の手配者によってほぼ同時に登録された"
+                    "可能性があります。画面を更新してから、もう一度お試しください。"
+                )
+                save_succeeded = False
+            except SQLAlchemyError:
+                # [追加] 想定していない種類のDBエラー（例: DB側の列が
+                # 足りない等）が起きた場合も、エラー画面ではなく登録画面に
+                # メッセージを表示しつつ、詳細はログ（Renderの Logs タブ）に
+                # 残す。原因調査をしやすくするための変更。
+                db.session.rollback()
+                app.logger.exception("手配書の保存に失敗しました")
+                error_message = (
+                    "手配書の保存に失敗しました。時間をおいて再度お試しいただくか、"
+                    "解決しない場合は管理者にお問い合わせください。"
+                )
+                save_succeeded = False
 
-            # [追加] 会館名・「手当」の金額が指定されていれば、対象ユーザーの
-            # 出退勤画面（honso_stamp/tsuya_stamp）にも反映されるよう、
-            # Timeレコードに書き込む
-            # （「手配者がユーザーの代理で設定する」イメージ）。
-            _apply_arrangement_to_time_record(
-                target_user.number, shift, date_str, place, other_place, allowance_amounts
-            )
+            if save_succeeded:
+                # [追加] 会館名・「手当」の金額が指定されていれば、対象ユーザーの
+                # 出退勤画面（honso_stamp/tsuya_stamp）にも反映されるよう、
+                # Timeレコードに書き込む
+                # （「手配者がユーザーの代理で設定する」イメージ）。
+                _apply_arrangement_to_time_record(
+                    target_user.number, shift, date_str, place, other_place, allowance_amounts
+                )
 
-            return redirect(url_for('arrangement_manage'))
+                return redirect(url_for('arrangement_manage'))
 
     # [追加] 対象ユーザーの選択肢は、一般従業員（管理者・手配者を除く）のみ。
     employees = User.query.filter_by(is_admin=False, is_arranger=False).order_by(User.number).all()

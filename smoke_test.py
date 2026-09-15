@@ -15,6 +15,8 @@ from models import User, Time, Arrangement, Place  # noqa: E402
 import honso  # noqa: E402
 import tsuya  # noqa: E402
 import notifications  # noqa: E402
+from unittest import mock  # noqa: E402
+from sqlalchemy.exc import IntegrityError  # noqa: E402
 
 # [修正] index.pyはもはやモジュールレベルの固定 `today` を持たない
 # （__init__.get_today()を呼び出し都度使う設計に変更したため）。
@@ -1840,5 +1842,68 @@ assert "サブリーダー".encode("utf-8") not in r_attendance_8007.data
 # （8007は時給未設定のため本葬・通夜の支給額は0円、七郎会館の交通費も0円）
 assert "1,800円".encode("utf-8") in r_attendance_8007.data
 assert "支給額合計".encode("utf-8") in r_attendance_8007.data
+
+# --- [追加] 手配書登録画面で、保存(db.session.commit())に失敗した場合の
+#     挙動の確認。
+#     [修正前の不具合] 以前はDB保存に失敗しても画面には何も表示せず、
+#     登録済み一覧画面へリダイレクトしていたため、「登録できたように
+#     見えて実は一覧に増えない」という分かりにくい状態になっていた
+#     （本番で実際に問い合わせを受けた不具合の原因のひとつ）。
+#     修正後は、保存に失敗した場合はリダイレクトせず、エラーメッセージ
+#     付きで登録画面を再表示することを確認する。
+#     db.session.commit()が例外を投げるケースを、実際のDB制約違反を
+#     再現する代わりにモックで再現する（一意制約違反はテスト用クライアント
+#     から確実に再現するのが難しいため）。
+with app.app_context():
+    target_0003_for_fail = User.query.filter_by(number="0003").first()
+    target_0003_fail_id = target_0003_for_fail.id
+    # 失敗時にArrangementが実際には保存されていないことを確認するため、
+    # テスト対象の(target_user, shift, date)の組み合わせがまだ無いことを確認
+    assert Arrangement.query.filter_by(
+        target_user_id=target_0003_fail_id, shift="honso", date=today_str
+    ).first() is None
+
+with mock.patch(
+    "sqlalchemy.orm.Session.commit", side_effect=IntegrityError("stmt", {}, Exception("dup"))
+):
+    r_arr_commit_fail = client_arranger.post(
+        "/arrangement_manage",
+        data={
+            "target_user_id": str(target_0003_fail_id),
+            "shift": "honso",
+            "date": today_str,
+            "memo": "保存失敗時の挙動確認用",
+        },
+        follow_redirects=False,
+    )
+print("POST /arrangement_manage (保存失敗をモックで再現) ->", r_arr_commit_fail.status_code)
+# リダイレクト(302)ではなく、登録画面がそのまま(200)再表示されること
+assert r_arr_commit_fail.status_code == 200
+# エラーメッセージが表示されること（無言で一覧に戻らない）
+assert "同じ内容の手配書が別の手配者によってほぼ同時に登録された".encode("utf-8") in r_arr_commit_fail.data
+
+with app.app_context():
+    # 保存が失敗しているため、Arrangementは作成されていないこと
+    assert Arrangement.query.filter_by(
+        target_user_id=target_0003_fail_id, shift="honso", date=today_str
+    ).first() is None
+
+# モック解除後、同じ内容で通常通り登録できること（アプリ自体は壊れていないこと）の確認
+r_arr_commit_retry = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_0003_fail_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "保存失敗時の挙動確認用（再試行）",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (モック解除後の再試行) ->", r_arr_commit_retry.status_code)
+assert r_arr_commit_retry.status_code == 302
+with app.app_context():
+    assert Arrangement.query.filter_by(
+        target_user_id=target_0003_fail_id, shift="honso", date=today_str
+    ).first() is not None
 
 print("\nALL SMOKE TESTS PASSED")
