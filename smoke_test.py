@@ -1632,4 +1632,193 @@ assert r_attendance_8006_after.status_code == 200
 # 交通費の合計は引き続き1,000円のまま（「その他」分は加算されない）
 assert "1,000円".encode("utf-8") in r_attendance_8006_after.data
 
+# --- [追加] 「手当」欄（休憩以外：リーダー・サブリーダー・研修・待機・
+#     指定日・遠方地・特別手当・高速道路）を、手配書登録画面
+#     (/arrangement_manage)で金額まで指定して設定できるようにし、
+#     金額が設定された項目だけが出退勤画面(honso_stamp/honso_modify)の
+#     休憩欄の下に読み取り専用で表示されることの確認 ---
+
+with app.app_context():
+    if not User.query.filter_by(number="8007").first():
+        db.session.add(User(username="テスト七郎", number="8007",
+                             password=generate_password_hash("test6789"), is_admin=False))
+        db.session.commit()
+    target_8007 = User.query.filter_by(number="8007").first()
+    target_8007_id = target_8007.id
+
+# 8007用の会館を1件登録しておく（この手配書で会館名も同時に設定する）
+client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "form_type": "place", "place_target_user_id": str(target_8007_id),
+        "place_name": "七郎会館",
+    },
+    follow_redirects=False,
+)
+
+# 手配者が、8007・本葬・本日の手配書に、会館名とあわせて「手当」の
+# リーダー(500円)・高速道路(1000円)だけをチェックして登録する
+# （サブリーダー等は未チェックのまま＝金額を送らない）。
+r_arr_allowance_1 = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_8007_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "手当のテスト（1回目）",
+        "place": "七郎会館",
+        "leader_amount": "500",
+        "highway_amount": "1000",
+    },
+    follow_redirects=False,
+)
+print("POST /arrangement_manage (8007宛て・本葬・リーダー500円+高速道路1000円) ->", r_arr_allowance_1.status_code)
+assert r_arr_allowance_1.status_code == 302
+
+with app.app_context():
+    arrangement_8007 = Arrangement.query.filter_by(
+        target_user_id=target_8007_id, shift="honso", date=today_str
+    ).first()
+    assert arrangement_8007 is not None
+    assert arrangement_8007.leader_amount == 500
+    assert arrangement_8007.highway_amount == 1000
+    assert arrangement_8007.subleader_amount is None
+    assert arrangement_8007.special_amount is None
+
+    time_8007 = Time.query.filter_by(number="8007", date=today_str).first()
+    assert time_8007 is not None
+    assert time_8007.place1 == "七郎会館"
+    assert time_8007.leader_amount1 == 500
+    assert time_8007.highway1 == "on"
+    assert time_8007.express1 == "1000"
+    assert time_8007.subleader_amount1 is None
+    assert time_8007.special_amount1 is None
+    time_8007_id = time_8007.id
+
+# 手配書登録画面の一覧にも、金額が設定された項目だけが表示されること
+r_manage_allowance = client_arranger.get("/arrangement_manage", follow_redirects=False)
+assert "リーダー：500円".encode("utf-8") in r_manage_allowance.data
+assert "高速道路：1,000円".encode("utf-8") in r_manage_allowance.data
+assert "サブリーダー：".encode("utf-8") not in r_manage_allowance.data
+
+# 対象ユーザー(8007)本人が出勤入力画面を開くと、会館名は手配者設定済みで
+# 選び直せず、「手当」は金額が設定された項目（リーダー・高速道路）だけが
+# 休憩欄の下に読み取り専用で表示されること。チェックボックス自体は
+# もう表示されない（手配書登録画面に機能が移動したため）。
+client_8007 = app.test_client()
+client_8007.post("/login", data={"login": "ログイン", "number": "8007", "password": "test6789"})
+r_honso_8007_preset = client_8007.get("/honso_stamp", follow_redirects=False)
+print("GET /honso_stamp (8007, 手配者設定済みの手当の確認) ->", r_honso_8007_preset.status_code)
+assert r_honso_8007_preset.status_code == 200
+assert "リーダー：500円".encode("utf-8") in r_honso_8007_preset.data
+assert "高速道路：1,000円".encode("utf-8") in r_honso_8007_preset.data
+# [追加] 金額が設定されていない項目（サブリーダー・研修など）は、
+# 読み取り専用表示（"項目名：金額円"の形式）としては出てこないこと。
+# （HTMLコメント中に項目名そのものは残るため、完全一致の"サブリーダー："
+# のような表示用文字列で判定する。）
+assert "サブリーダー：".encode("utf-8") not in r_honso_8007_preset.data
+assert "研修：".encode("utf-8") not in r_honso_8007_preset.data
+# [追加] 旧チェックボックス（leader1・highway1・express1等）が、この画面
+# からは完全に無くなっている（手配書登録画面に機能が移動した）ことの確認。
+assert 'id="leader1"'.encode("utf-8") not in r_honso_8007_preset.data
+assert 'id="highway1"'.encode("utf-8") not in r_honso_8007_preset.data
+assert 'name="express1"'.encode("utf-8") not in r_honso_8007_preset.data
+
+# 実際に出勤打刻しても、リーダー・高速道路の金額はそのまま維持される
+# （honso_stamp()側はこれらのカラムに一切触れないため）。
+r_honso_8007_clockin = client_8007.post(
+    "/honso_stamp",
+    data={"place1": "七郎会館", "start1": "09:00"},
+    follow_redirects=False,
+)
+assert r_honso_8007_clockin.status_code == 302
+
+with app.app_context():
+    time_8007_after_clockin = db.session.get(Time, time_8007_id)
+    assert time_8007_after_clockin.start1 == "09:00"
+    assert time_8007_after_clockin.leader_amount1 == 500
+    assert time_8007_after_clockin.express1 == "1000"
+    assert Time.query.filter_by(number="8007", date=today_str).count() == 1
+
+# 出勤済み・退勤前の退勤入力画面(honso_modify)でも、同じ内容が読み取り
+# 専用で表示され続けること。
+r_honso_modify_8007 = client_8007.get("/honso_modify", follow_redirects=False)
+print("GET /honso_modify (8007, 手当の表示確認) ->", r_honso_modify_8007.status_code)
+assert r_honso_modify_8007.status_code == 200
+assert "リーダー：500円".encode("utf-8") in r_honso_modify_8007.data
+assert "高速道路：1,000円".encode("utf-8") in r_honso_modify_8007.data
+assert 'id="leader1"'.encode("utf-8") not in r_honso_modify_8007.data
+
+# 退勤打刻後も金額はそのまま保持される
+r_honso_modify_8007_post = client_8007.post(
+    "/honso_modify", data={"end1": "18:00"}, follow_redirects=False,
+)
+assert r_honso_modify_8007_post.status_code == 302
+with app.app_context():
+    time_8007_after_end = db.session.get(Time, time_8007_id)
+    assert time_8007_after_end.end1 == "18:00"
+    assert time_8007_after_end.leader_amount1 == 500
+    assert time_8007_after_end.express1 == "1000"
+
+# 手配者が同じ(8007・本葬・本日)の手配書を再度更新し、今度は特別手当だけを
+# チェックしてリーダー・高速道路はチェックしなかった場合：
+# ・手配書自体(Arrangement)は毎回全体を上書きするので、リーダー・高速道路は
+#   Noneに戻る。
+# ・Timeレコードは「今回チェックされた項目だけ」を反映するので、特別手当が
+#   新たに反映されつつ、既にTimeへ反映済みのリーダー・高速道路の金額は
+#   そのまま維持される（フォームは毎回空の状態から入力する仕組みのため、
+#   前回チェックした項目をうっかり消してしまわないようにするための設計）。
+r_arr_allowance_2 = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_8007_id),
+        "shift": "honso",
+        "date": today_str,
+        "memo": "手当のテスト（2回目・特別手当のみ）",
+        "place": "七郎会館",
+        "special_amount": "300",
+    },
+    follow_redirects=False,
+)
+assert r_arr_allowance_2.status_code == 302
+
+with app.app_context():
+    arrangement_8007_after = Arrangement.query.filter_by(
+        target_user_id=target_8007_id, shift="honso", date=today_str
+    ).first()
+    assert arrangement_8007_after.special_amount == 300
+    assert arrangement_8007_after.leader_amount is None
+    assert arrangement_8007_after.highway_amount is None
+
+    time_8007_after_update = db.session.get(Time, time_8007_id)
+    assert time_8007_after_update.special_amount1 == 300
+    assert time_8007_after_update.leader_amount1 == 500
+    assert time_8007_after_update.express1 == "1000"
+
+# マイナスの金額（不正な入力）は、Arrangement・Timeのどちらにも反映されず
+# 未設定(None)のまま扱われることの確認（通夜側でテスト）。
+r_arr_allowance_negative = client_arranger.post(
+    "/arrangement_manage",
+    data={
+        "target_user_id": str(target_8007_id),
+        "shift": "tsuya",
+        "date": today_str,
+        "memo": "マイナス金額のテスト",
+        "wait_amount": "-50",
+    },
+    follow_redirects=False,
+)
+assert r_arr_allowance_negative.status_code == 302
+with app.app_context():
+    arrangement_8007_tsuya = Arrangement.query.filter_by(
+        target_user_id=target_8007_id, shift="tsuya", date=today_str
+    ).first()
+    assert arrangement_8007_tsuya is not None
+    assert arrangement_8007_tsuya.wait_amount is None
+
+    # 本葬側と同じ(number, date)の行なので、同じTimeレコードのはず
+    time_8007_tsuya = Time.query.filter_by(number="8007", date=today_str).first()
+    assert time_8007_tsuya.id == time_8007_id
+    assert time_8007_tsuya.wait_amount2 is None
+
 print("\nALL SMOKE TESTS PASSED")

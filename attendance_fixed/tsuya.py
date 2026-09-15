@@ -18,6 +18,10 @@ from sqlalchemy.exc import IntegrityError
 # [追加] 出退勤画面の「登録」ボタンが押されたときにメール通知するための
 # モジュール（notifications.py参照）。
 from notifications import send_attendance_notification
+# [追加] 「手当」欄（休憩以外）は手配者が手配書登録画面で設定するように
+# なったため、出退勤画面では金額が設定されている項目だけを読み取り専用で
+# 表示する（allowances.py参照）。
+from allowances import allowance_display_items
 
 
 #------------------------------------------------
@@ -80,15 +84,12 @@ def tsuya_stamp():
     # チェック時に入力する休憩時間（分）の初期値。
     break2=None
     break_minutes2=None
-    leader2='off'
-    subleader2=None
-    teach2=None
-    wait2=None
-    designated2=None
-    distant2=None
-    special2=None
-    highway2=None
-    express2=None
+    # [修正] 「手当」欄の休憩以外の項目は、手配者が手配書登録画面
+    # (/arrangement_manage)で金額まで指定して設定する方式に変更した
+    # ため、この画面ではチェックボックスとしては扱わず、既にTime
+    # レコードに反映されている金額を読み取り専用で表示するだけにする
+    # （allowance_display_items参照）。
+    allowance_items = allowance_display_items(existing_record, "tsuya")
     # [修正] 手配者が「手配書登録」画面(/arrangement_manage)で、この
     # ユーザー・通夜・本日の会館名を事前に選択していた場合、その値が
     # 既にTime.place2/other2に反映されている（arrangement.py参照）。
@@ -113,15 +114,6 @@ def tsuya_stamp():
           break_minutes2 = int(break_minutes2_raw) if break_minutes2_raw else None
        except ValueError:
           break_minutes2 = None
-       leader2 = request.form.get('leader2')
-       subleader2 = request.form.get('subleader2')
-       teach2 = request.form.get('teach2')
-       wait2 = request.form.get('wait2')
-       designated2 = request.form.get('designated2')
-       distant2 = request.form.get('distant2')
-       special2 = request.form.get('special2')
-       highway2 = request.form.get('highway2')
-       express2 = request.form.get('express2')
        other2 = request.form.get('other2')
 
        # [修正] 元コードは「今日のレコードが既にあるか」を session['record_id']
@@ -150,15 +142,6 @@ def tsuya_stamp():
           time.end2=end2
           time.break2=break2
           time.break_minutes2=break_minutes2
-          time.leader2=leader2
-          time.subleader2=subleader2
-          time.teach2=teach2
-          time.wait2=wait2
-          time.designated2=designated2
-          time.distant2=distant2
-          time.special2=special2
-          time.highway2=highway2
-          time.express2=express2
           time.other2=other2
           db.session.add(time)                      # 入力値をTimeテーブルに追加
           try:
@@ -218,15 +201,6 @@ def tsuya_stamp():
           modify_record.end2=end2
           modify_record.break2=break2
           modify_record.break_minutes2=break_minutes2
-          modify_record.leader2=leader2
-          modify_record.subleader2=subleader2
-          modify_record.teach2=teach2
-          modify_record.wait2=wait2
-          modify_record.designated2=designated2
-          modify_record.distant2=distant2
-          modify_record.special2=special2
-          modify_record.highway2=highway2
-          modify_record.express2=express2
           modify_record.other2=other2
           db.session.commit()                     # 入力値で更新
 
@@ -267,16 +241,8 @@ def tsuya_stamp():
                             end2=end2,
                             break2=break2,
                             break_minutes2=break_minutes2,
-                            leader2=leader2,
-                            subleader2=subleader2, 
-                            teach2=teach2, 
-                            wait2=wait2, 
-                            designated2=designated2, 
-                            distant2=distant2, 
-                            special2=special2, 
-                            highway2=highway2, 
-                            express2=express2, 
-                            other2=other2)  # パラメータをexit_view.htmlに送る
+                            allowance_items=allowance_items,
+                            other2=other2)
 
 
 #------------------------------------------------
@@ -326,16 +292,11 @@ def tsuya_modify():
     # [追加] 「休憩」チェックボックスと休憩時間（分）の初期表示値。
     break2 = "checked" if record.break2 else "off"
     break_minutes2 = record.break_minutes2 if record.break_minutes2 else ""
-    leader2 = "checked" if record.leader2 else "off"
-    subleader2 = "checked" if record.subleader2 else "off"
-    teach2 = "checked" if record.teach2 else "off"
-    wait2 = "checked" if record.wait2 else "off"
-    designated2 = "checked" if record.designated2 else "off"
-    distant2 = "checked" if record.distant2 else "off"
-    special2 = "checked" if record.special2 else "off"
-    highway2 = "checked" if record.highway2 else "off"
-    express2 = record.express2 if record.express2 else "-,---"
     other2 = record.other2 if record.other2 else ""
+    # [修正] 「手当」欄の休憩以外の項目は手配者が手配書登録画面で設定する
+    # ようになったため、この画面ではチェックボックスとしては扱わず、
+    # 既にTimeレコードに反映されている金額を読み取り専用で表示する。
+    allowance_items = allowance_display_items(record, "tsuya")
 
     if request.method == 'POST':                  # リクエストがPOSTの場合
 
@@ -348,20 +309,6 @@ def tsuya_modify():
           break_minutes2 = int(break_minutes2_raw) if break_minutes2_raw else None
        except ValueError:
           break_minutes2 = None
-       leader2 = request.form.get('leader2')
-       subleader2 = request.form.get('subleader2')
-       teach2 = request.form.get('teach2')
-       wait2 = request.form.get('wait2')
-       designated2 = request.form.get('designated2')
-       distant2 = request.form.get('distant2')
-       special2 = request.form.get('special2')
-       highway2 = request.form.get('highway2')
-
-       if express2 == "-,---":
-          express2 = request.form.get('express2')
-       else:
-          express2 = express2
-
        other2 = request.form.get('other2')
 
        if not other2:
@@ -378,15 +325,6 @@ def tsuya_modify():
        modify_record.end2=end2
        modify_record.break2=break2
        modify_record.break_minutes2=break_minutes2
-       modify_record.leader2=leader2
-       modify_record.subleader2=subleader2
-       modify_record.teach2=teach2
-       modify_record.wait2=wait2
-       modify_record.designated2=designated2
-       modify_record.distant2=distant2
-       modify_record.special2=special2
-       modify_record.highway2=highway2
-       modify_record.express2=express2
        modify_record.other2=other2
        db.session.commit()                     # 入力値で更新
 
@@ -420,13 +358,5 @@ def tsuya_modify():
                             break2=break2,
                             break_minutes2=break_minutes2,
                             other2=other2,
-                            leader2=leader2,
-                            subleader2=subleader2,
-                            teach2=teach2,
-                            wait2=wait2,
-                            designated2=designated2,
-                            distant2=distant2,
-                            special2=special2,
-                            highway2=highway2,
-                            express2=express2)
+                            allowance_items=allowance_items)
 

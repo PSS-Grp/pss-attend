@@ -139,6 +139,20 @@ class Time(db.Model):
     express1 = db.Column(db.String(10))
     other1 = db.Column(db.String(255))
     special1 = db.Column(db.String(10))
+    # [追加/修正] 「手当」欄のリーダー・サブリーダー・研修・待機・指定日・
+    # 遠方地・特別手当は、以前は従業員本人が出退勤画面でチェックする
+    # だけ（金額は持たない）の項目だったが、手配者が手配書登録画面で
+    # 金額まで含めて設定する方式に変更した（highway1/express1と同じ
+    # 「チェック＋金額」の考え方）。leader1等の旧カラムはそのまま残す
+    # （過去データの互換性のため）が、今後はこちらの金額カラムに
+    # 手配者が設定した金額が入る。未設定（該当なし）の場合はNULL。
+    leader_amount1 = db.Column(db.Integer, nullable=True)
+    subleader_amount1 = db.Column(db.Integer, nullable=True)
+    teach_amount1 = db.Column(db.Integer, nullable=True)
+    wait_amount1 = db.Column(db.Integer, nullable=True)
+    designated_amount1 = db.Column(db.Integer, nullable=True)
+    distant_amount1 = db.Column(db.Integer, nullable=True)
+    special_amount1 = db.Column(db.Integer, nullable=True)
     place2 = db.Column(db.String(255))
     start2 = db.Column(db.String(10))
     end2 = db.Column(db.String(10))
@@ -156,6 +170,14 @@ class Time(db.Model):
     express2 = db.Column(db.String(10))
     other2 = db.Column(db.String(255))
     special2 = db.Column(db.String(10))
+    # [追加] 通夜側の手当金額（意味はleader_amount1等の本葬側と同様）。
+    leader_amount2 = db.Column(db.Integer, nullable=True)
+    subleader_amount2 = db.Column(db.Integer, nullable=True)
+    teach_amount2 = db.Column(db.Integer, nullable=True)
+    wait_amount2 = db.Column(db.Integer, nullable=True)
+    designated_amount2 = db.Column(db.Integer, nullable=True)
+    distant_amount2 = db.Column(db.Integer, nullable=True)
+    special_amount2 = db.Column(db.Integer, nullable=True)
 
 
 class Place(db.Model):
@@ -227,6 +249,23 @@ class Arrangement(db.Model):
     # ままでもよい（会館が未定のまま手配書だけ先に登録するケースがあるため）。
     place = db.Column(db.String(255), nullable=True)
     other_place = db.Column(db.String(255), nullable=True)
+    # [追加] 従来は従業員本人が出退勤画面（勤怠登録画面）でチェックしていた
+    # 「手当」（休憩を除く：リーダー・サブリーダー・研修・待機・指定日・
+    # 遠方地・特別手当・高速道路）を、手配者がこの手配書登録画面で
+    # 金額まで指定して設定できるようにする。各項目、未設定（該当なし）
+    # の場合はNULL。設定した金額は、models.Timeの対応するカラム
+    # （本葬ならleader_amount1等、通夜ならleader_amount2等。高速道路は
+    # 既存のhighway1/express1・highway2/express2をそのまま使う）にも
+    # 反映され、対象ユーザーの出退勤画面に金額が入力された項目だけ
+    # 表示される。
+    leader_amount = db.Column(db.Integer, nullable=True)
+    subleader_amount = db.Column(db.Integer, nullable=True)
+    teach_amount = db.Column(db.Integer, nullable=True)
+    wait_amount = db.Column(db.Integer, nullable=True)
+    designated_amount = db.Column(db.Integer, nullable=True)
+    distant_amount = db.Column(db.Integer, nullable=True)
+    special_amount = db.Column(db.Integer, nullable=True)
+    highway_amount = db.Column(db.Integer, nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=True)

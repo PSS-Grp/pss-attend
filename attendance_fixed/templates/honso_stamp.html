@@ -14,6 +14,14 @@
         font-size: 13px;
         margin: 4px 0 10px 0;
       }
+      /* [追加] 手配者が設定した「手当」（金額が入力された項目のみ）を、
+           休憩欄の下に読み取り専用で表示するためのスタイル。 */
+      .allowance-display {
+        margin-top: 10px;
+      }
+      .allowance-display p {
+        margin: 2px 0;
+      }
     </style>
   </head>
 
@@ -156,45 +164,22 @@
              チェックボックスと数値入力の組み合わせと同じ仕組み）。 -->
         &emsp;<input type="checkbox" id="break1" name="break1" onchange="toggleBreak1()" />&emsp;
         <label for="break1">休憩</label>
-        <input type="number" min="0" step="1" disabled id="break_minutes1" name="break_minutes1" placeholder="分" /><br /><br />
+        <input type="number" min="0" step="1" disabled id="break_minutes1" name="break_minutes1" placeholder="分" />
 
-        &emsp;<input type="checkbox" id="leader1" name="leader1" />&emsp;
-        <label for="leader1">リーダー</label><br />
-
-        &emsp;<input type="checkbox" id="subleader1" name="subleader1" />&emsp;
-        <label for="subleader1">サブリーダー</label><br />
-
-        &emsp;<input type="checkbox" id="teach1" name="teach1" />&emsp;
-        <label for="teach1">研修</label><br />
-
-        &emsp;<input type="checkbox" id="wait1" name="wait1" />&emsp;
-        <label for="wait1">待機</label><br />
-
-        &emsp;<input type="checkbox" id="designated1" name="designated1" />&emsp;
-        <label for="designated1">指定日</label><br />
-
-        &emsp;<input type="checkbox" id="distant1" name="distant1" />&emsp;
-        <label for="distant1">遠方地 </label><br />
-
-        &emsp;<input type="checkbox" id="special1" name="special1" />&emsp;
-        <label for="special1">特別手当</label><br />
-
-        &emsp;<input type="checkbox" id="highway1" name="highway1" onchange="change()"/>&emsp;
-        <label for="highway1">高速道路</label>
-        <input type="number" required disabled id="express1" name="express1" placeholder="金額" /><br /><br />
+        <!-- [修正] リーダー・サブリーダー・研修・待機・指定日・遠方地・
+             特別手当・高速道路は、手配者が手配書登録画面
+             (/arrangement_manage)で金額まで指定して設定する方式に変更した
+             ため、この画面ではチェックボックスとしては扱わず、金額が
+             入力された項目だけを休憩の下に読み取り専用で表示する。 -->
+        {% if allowance_items %}
+        <div class="allowance-display">
+          {% for item in allowance_items %}
+          <p>{{ item.label }}：{{ "{:,}".format(item.amount) }}円</p>
+          {% endfor %}
+        </div>
+        {% endif %}
       </p>
     </div>
-
-      <script>
-        var express1_elem = document.getElementById("express1");
-        function change() {
-          if (document.getElementById("highway1").checked) {
-    		express1_elem.disabled = false;   //trueグレーアウト
-          } else {
-                express1_elem.disabled = true;
-          }
-        }
-      </script>
 
       <!-- [追加] 「休憩」チェックボックスの状態に応じて、休憩時間（分）の
            入力欄の有効／無効を切り替える。 -->

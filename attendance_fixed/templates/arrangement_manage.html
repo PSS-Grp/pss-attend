@@ -63,6 +63,33 @@
         font-weight: normal;
         color: #333;
       }
+      /* [追加] 「手当」欄（休憩以外）の各項目を、チェックボックス＋金額の
+           組み合わせで並べて表示するためのスタイル。 */
+      .allowance-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .allowance-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .allowance-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: normal;
+        color: #333;
+        white-space: nowrap;
+        width: 110px;
+      }
+      .allowance-row input[type="number"] {
+        width: 140px;
+        box-sizing: border-box;
+        padding: 5px;
+        font-size: 14px;
+      }
       .arrangement-form .submit-row {
         text-align: right;
         margin-top: 10px;
@@ -273,6 +300,28 @@
               </td>
             </tr>
             <tr>
+              <!-- [追加] 従来は従業員本人が出退勤画面（勤怠登録画面）で
+                   チェックしていた「手当」（休憩以外）を、この手配書登録
+                   画面でまとめて設定できるようにする。高速道路と同じ
+                   「チェック＋金額」の組み合わせを、他の項目にも適用した。
+                   チェックした項目だけ、対象ユーザーの出退勤画面に金額が
+                   表示される（未チェックの項目は表示されない）。 -->
+              <td class="label">手当</td>
+              <td>
+                <div class="allowance-list">
+                  {% for item_key, item_label in allowance_items %}
+                  <div class="allowance-row">
+                    <label class="allowance-checkbox">
+                      <input type="checkbox" class="allowance-flag" onchange="toggleAllowanceAmount(this)">
+                      {{ item_label }}
+                    </label>
+                    <input type="number" name="{{ item_key }}_amount" min="0" step="1" placeholder="金額" disabled>
+                  </div>
+                  {% endfor %}
+                </div>
+              </td>
+            </tr>
+            <tr>
               <!-- [修正] 会館案内図などPDFで渡されることも多いため、
                    画像に加えてPDFもアップロードできるようにした
                    （フォーム項目名(name="image")はそのまま流用）。 -->
@@ -288,6 +337,21 @@
             <button type="submit">登録する</button>
           </p>
         </form>
+
+        <script>
+          // [追加] 「手当」欄の各項目のチェックボックスに連動して、
+          // 隣接する金額入力欄の有効／無効を切り替える
+          // （honso_stamp.html等の高速道路と同じ仕組み）。チェックを外した
+          // 場合は、次にチェックしたときに前回の金額が残っていないよう
+          // 入力値もクリアしておく。
+          function toggleAllowanceAmount(checkbox) {
+            var amountInput = checkbox.closest(".allowance-row").querySelector('input[type="number"]');
+            amountInput.disabled = !checkbox.checked;
+            if (!checkbox.checked) {
+              amountInput.value = "";
+            }
+          }
+        </script>
 
         <script>
           // [追加] 対象ユーザーごとに会館名の選択肢が異なる(honso_stamp.html等と
@@ -360,6 +424,9 @@
                 <th>対象ユーザー</th>
                 <th>本葬／通夜</th>
                 <th>会館名</th>
+                <!-- [追加] 手配書登録フォームで設定した「手当」（金額が入力
+                     された項目のみ）を一覧でも確認できるようにする。 -->
+                <th>手当</th>
                 <th>画像／PDF</th>
                 <th>メモ</th>
                 <th></th>
@@ -375,6 +442,16 @@
                      それ以外はそのまま選択された会館名を表示する
                      （notifications._effective_placeと同じ考え方）。 -->
                 <td>{{ (a.other_place if a.place == "その他" else a.place) or "未定" }}</td>
+                <td class="memo-cell">
+                  {%- set ns = namespace(parts=[]) -%}
+                  {%- for item_key, item_label in allowance_items -%}
+                    {%- set amount = a[item_key ~ "_amount"] -%}
+                    {%- if amount is not none -%}
+                      {%- set ns.parts = ns.parts + [item_label ~ "：" ~ "{:,}".format(amount) ~ "円"] -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                  {{ ns.parts | join("、") if ns.parts else "-" }}
+                </td>
                 <td>
                   {% if a.image_filename %}
                     {% if a.image_filename.lower().endswith('.pdf') %}

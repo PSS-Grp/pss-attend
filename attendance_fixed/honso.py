@@ -18,6 +18,10 @@ from sqlalchemy.exc import IntegrityError
 # [追加] 出退勤画面の「登録」ボタンが押されたときにメール通知するための
 # モジュール（notifications.py参照）。
 from notifications import send_attendance_notification
+# [追加] 「手当」欄（休憩以外）は手配者が手配書登録画面で設定するように
+# なったため、出退勤画面では金額が設定されている項目だけを読み取り専用で
+# 表示する（allowances.py参照）。
+from allowances import allowance_display_items
 
 
 #------------------------------------------------
@@ -82,15 +86,13 @@ def honso_stamp():
     # チェック時に入力する休憩時間（分）の初期値。
     break1=None
     break_minutes1=None
-    leader1='off'
-    subleader1=None
-    teach1=None
-    wait1=None
-    designated1=None
-    distant1=None
-    special1=None
-    highway1=None
-    express1=None
+    # [修正] 「手当」欄の休憩以外の項目(リーダー・サブリーダー・研修・
+    # 待機・指定日・遠方地・特別手当・高速道路)は、手配者が手配書登録
+    # 画面(/arrangement_manage)で金額まで指定して設定する方式に変更した
+    # ため、この画面ではチェックボックスとしては扱わず、既にTimeレコード
+    # に反映されている金額を読み取り専用で表示するだけにする
+    # （allowance_display_items参照）。
+    allowance_items = allowance_display_items(existing_record, "honso")
     # [修正] 手配者が「手配書登録」画面(/arrangement_manage)で、この
     # ユーザー・本葬・本日の会館名を事前に選択していた場合、その値が
     # 既にTime.place1/other1に反映されている（arrangement.py参照）。
@@ -117,15 +119,6 @@ def honso_stamp():
           break_minutes1 = int(break_minutes1_raw) if break_minutes1_raw else None
        except ValueError:
           break_minutes1 = None
-       leader1 = request.form.get('leader1')
-       subleader1 = request.form.get('subleader1')
-       teach1 = request.form.get('teach1')
-       wait1 = request.form.get('wait1')
-       designated1 = request.form.get('designated1')
-       distant1 = request.form.get('distant1')
-       special1 = request.form.get('special1')
-       highway1 = request.form.get('highway1')
-       express1 = request.form.get('express1')
        other1 = request.form.get('other1')
 
        # [修正] 以前は常に新しいTime()行を作って追加していたが、これだと
@@ -147,15 +140,6 @@ def honso_stamp():
        time.end1=end1
        time.break1=break1
        time.break_minutes1=break_minutes1
-       time.leader1=leader1
-       time.subleader1=subleader1
-       time.teach1=teach1
-       time.wait1=wait1
-       time.designated1=designated1
-       time.distant1=distant1
-       time.special1=special1
-       time.highway1=highway1
-       time.express1=express1
        time.other1=other1
        if not existing_record:
           db.session.add(time)                   # 入力値をTimeテーブルに追加
@@ -214,16 +198,8 @@ def honso_stamp():
                             end1=end1,
                             break1=break1,
                             break_minutes1=break_minutes1,
-                            leader1=leader1,
-                            subleader1=subleader1, 
-                            teach1=teach1, 
-                            wait1=wait1, 
-                            designated1=designated1, 
-                            distant1=distant1, 
-                            special1=special1, 
-                            highway1=highway1, 
-                            express1=express1, 
-                            other1=other1)  # パラメータをexit_view.htmlに送る
+                            allowance_items=allowance_items,
+                            other1=other1)
 
 #------------------------------------------------
 # 編集ページ
@@ -267,18 +243,11 @@ def honso_modify():
     # [追加] 「休憩」チェックボックスと休憩時間（分）の初期表示値。
     break1 = "checked" if record.break1 else "off"
     break_minutes1 = record.break_minutes1 if record.break_minutes1 else ""
-    leader1 = "checked" if record.leader1 else "off"
-    subleader1 = "checked" if record.subleader1 else "off"
-    teach1 = "checked" if record.teach1 else "off"
-    wait1 = "checked" if record.wait1 else "off"
-    designated1 = "checked" if record.designated1 else "off"
-    distant1 = "checked" if record.distant1 else "off"
-    special1 = "checked" if record.special1 else "off"
-    highway1 = "checked" if record.highway1 else "off"
-    express1 = record.express1 if record.express1 else "-,---"
     other1 = record.other1 if record.other1 else ""
-
-    print("セッションゲット",express1)
+    # [修正] 「手当」欄の休憩以外の項目は手配者が手配書登録画面で設定する
+    # ようになったため、この画面ではチェックボックスとしては扱わず、
+    # 既にTimeレコードに反映されている金額を読み取り専用で表示する。
+    allowance_items = allowance_display_items(record, "honso")
 
     if request.method == 'POST':                  # リクエストがPOSTの場合
 
@@ -291,24 +260,7 @@ def honso_modify():
           break_minutes1 = int(break_minutes1_raw) if break_minutes1_raw else None
        except ValueError:
           break_minutes1 = None
-       leader1 = request.form.get('leader1')
-       subleader1 = request.form.get('subleader1')
-       teach1 = request.form.get('teach1')
-       wait1 = request.form.get('wait1')
-       designated1 = request.form.get('designated1')
-       distant1 = request.form.get('distant1')
-       special1 = request.form.get('special1')
-       highway1 = request.form.get('highway1')
-#       express1 = request.form.get('express1')
-
-       if express1 == "-,---":
-          express1 = request.form.get('express1')
-       else:
-          express1 = express1
-
        other1 = request.form.get('other1')
-
-       print("入力ゲット",express1)
 
        # [修正] session['record_id'] 経由の再検索ではなく、関数の先頭で
        # number・today から検索し直した record（＝このユーザーの今日の
@@ -319,19 +271,8 @@ def honso_modify():
        modify_record.end1=end1
        modify_record.break1=break1
        modify_record.break_minutes1=break_minutes1
-       modify_record.leader1=leader1
-       modify_record.subleader1=subleader1
-       modify_record.teach1=teach1
-       modify_record.wait1=wait1
-       modify_record.designated1=designated1
-       modify_record.distant1=distant1
-       modify_record.special1=special1
-       modify_record.highway1=highway1
-       modify_record.express1=express1
        modify_record.other1=other1
        db.session.commit()
-
-       print("DB更新",express1)
 
        # [追加] 登録（退勤）ボタンが押されたことをメールで通知する。
        # 退勤時間が入力されているため、件名は【退勤】になる。
@@ -363,13 +304,5 @@ def honso_modify():
                             break1=break1,
                             break_minutes1=break_minutes1,
                             other1=other1,
-                            leader1=leader1,
-                            subleader1=subleader1,
-                            teach1=teach1,
-                            wait1=wait1,
-                            designated1=designated1,
-                            distant1=distant1,
-                            special1=special1,
-                            highway1=highway1,
-                            express1=express1)
+                            allowance_items=allowance_items)
 

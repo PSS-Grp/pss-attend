@@ -35,6 +35,9 @@ from flask_login import login_required, current_user
 
 from models import User, Arrangement, Place, Time
 from sqlalchemy.exc import IntegrityError
+# [追加] 「手当」欄（休憩以外）に関する共通定義・ヘルパー（honso.py/tsuya.py
+# と共有するため、allowances.pyに切り出している）。
+from allowances import ALLOWANCE_ITEMS, ALLOWANCE_LABELS, parse_allowance_amounts
 
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf"}
@@ -104,20 +107,26 @@ def _effective_place(place, other_place):
 
 
 #------------------------------------------------
-# [追加] 手配者が手配書登録画面で会館名を選択した場合、その対象ユーザーの
-# 出退勤画面(honso_stamp/tsuya_stamp)にもその会館名が反映されるよう、
-# Time.place1/other1（本葬）またはplace2/other2（通夜）に書き込む。
-# 「手配者がユーザーの代理で会館名を設定する」という位置づけのため、
-# 対象ユーザー・日付のTimeレコードが無ければ新規作成し、既に値が
-# 入っていても上書きする。
+# [追加] 手配者が手配書登録画面で設定した会館名・「手当」の金額を、
+# 対象ユーザーの出退勤画面(honso_stamp/tsuya_stamp)にも反映されるよう
+# Timeレコードに書き込む。「手配者がユーザーの代理で設定する」という
+# 位置づけのため、対象ユーザー・日付のTimeレコードが無ければ新規作成する。
 #
-# 会館名が選択されていない（未定のまま）場合は何もしない。手配書の
-# メモだけを更新したくて会館名欄を選び直さなかったときに、既に入って
-# いる会館名（従業員本人が既に打刻していた場合はその値）を誤って
-# 消してしまわないようにするため。
+# ・会館名(place)が選択されていない（未定のまま）場合は、Timeの会館名
+#   （place1/other1またはplace2/other2）はそのまま変更しない。手配書の
+#   メモだけを更新したくて会館名欄を選び直さなかったときに、既に入って
+#   いる会館名を誤って消してしまわないようにするため。
+# ・「手当」の金額(amounts)も同様に、この手配書でチェックされた
+#   （＝Noneでない）項目だけをTimeに反映し、チェックされなかった項目は
+#   そのまま変更しない（同じ理由。フォームは毎回空の状態から入力する
+#   ため、前回チェックした項目を今回も律儀に再現しないと消えてしまう、
+#   という事態を避けるため）。
+# ・会館名・金額のいずれも指定が無ければ、Timeレコード自体を新規に
+#   作らない（何も書き込むことが無いため）。
 #------------------------------------------------
-def _apply_place_to_time_record(number, shift, date_str, place, other_place):
-    if not place:
+def _apply_arrangement_to_time_record(number, shift, date_str, place, other_place, amounts):
+    has_amount = any(v is not None for v in amounts.values())
+    if not place and not has_amount:
         return
 
     record = Time.query.filter_by(number=number, date=date_str).first()
@@ -125,12 +134,32 @@ def _apply_place_to_time_record(number, shift, date_str, place, other_place):
         record = Time(number=number, date=date_str)
         db.session.add(record)
 
-    if shift == "honso":
-        record.place1 = place
-        record.other1 = other_place if place == "その他" else ""
-    else:
-        record.place2 = place
-        record.other2 = other_place if place == "その他" else ""
+    suffix = "1" if shift == "honso" else "2"
+
+    if place:
+        if shift == "honso":
+            record.place1 = place
+            record.other1 = other_place if place == "その他" else ""
+        else:
+            record.place2 = place
+            record.other2 = other_place if place == "その他" else ""
+
+    for item in ALLOWANCE_ITEMS:
+        amount = amounts.get(item)
+        if amount is not None:
+            setattr(record, "{}_amount{}".format(item, suffix), amount)
+
+    # [追加] 「高速道路」は、Timeモデルに元々ある専用カラム
+    # (highway1/express1・highway2/express2)をそのまま使う。他の項目と
+    # 同様、金額が指定されていない場合は既存の値を変更しない。
+    highway_amount = amounts.get("highway")
+    if highway_amount is not None:
+        if shift == "honso":
+            record.highway1 = "on"
+            record.express1 = str(highway_amount)
+        else:
+            record.highway2 = "on"
+            record.express2 = str(highway_amount)
 
     try:
         db.session.commit()
@@ -219,6 +248,10 @@ def arrangement_manage():
         other_place = (request.form.get('other_place') or '').strip() or None
         if place != "その他":
             other_place = None
+        # [追加] 「手当」欄（休憩以外）の各項目の金額。従来は従業員本人が
+        # 出退勤画面でチェックしていたが、手配者がこの画面で金額まで
+        # 指定して設定する（_apply_arrangement_to_time_record参照）。
+        allowance_amounts = parse_allowance_amounts(request.form)
 
         target_user = User.query.get(int(target_user_id)) if target_user_id and target_user_id.isdigit() else None
 
@@ -253,6 +286,14 @@ def arrangement_manage():
                 existing.memo = memo or None
                 existing.place = place
                 existing.other_place = other_place
+                existing.leader_amount = allowance_amounts["leader"]
+                existing.subleader_amount = allowance_amounts["subleader"]
+                existing.teach_amount = allowance_amounts["teach"]
+                existing.wait_amount = allowance_amounts["wait"]
+                existing.designated_amount = allowance_amounts["designated"]
+                existing.distant_amount = allowance_amounts["distant"]
+                existing.special_amount = allowance_amounts["special"]
+                existing.highway_amount = allowance_amounts["highway"]
                 existing.created_by_id = current_user.id
                 existing.updated_at = now
             else:
@@ -265,6 +306,14 @@ def arrangement_manage():
                     memo=memo or None,
                     place=place,
                     other_place=other_place,
+                    leader_amount=allowance_amounts["leader"],
+                    subleader_amount=allowance_amounts["subleader"],
+                    teach_amount=allowance_amounts["teach"],
+                    wait_amount=allowance_amounts["wait"],
+                    designated_amount=allowance_amounts["designated"],
+                    distant_amount=allowance_amounts["distant"],
+                    special_amount=allowance_amounts["special"],
+                    highway_amount=allowance_amounts["highway"],
                     created_by_id=current_user.id,
                     created_at=now,
                     updated_at=now,
@@ -281,11 +330,13 @@ def arrangement_manage():
                 # （どちらか一方の内容が保存されている状態になる）。
                 db.session.rollback()
 
-            # [追加] 会館名が選択されていれば、対象ユーザーの出退勤画面
-            # （honso_stamp/tsuya_stamp）にも反映されるよう、Timeレコードの
-            # place1/other1（本葬）またはplace2/other2（通夜）に書き込む
-            # （「手配者がユーザーの代理で会館名を設定する」イメージ）。
-            _apply_place_to_time_record(target_user.number, shift, date_str, place, other_place)
+            # [追加] 会館名・「手当」の金額が指定されていれば、対象ユーザーの
+            # 出退勤画面（honso_stamp/tsuya_stamp）にも反映されるよう、
+            # Timeレコードに書き込む
+            # （「手配者がユーザーの代理で設定する」イメージ）。
+            _apply_arrangement_to_time_record(
+                target_user.number, shift, date_str, place, other_place, allowance_amounts
+            )
 
             return redirect(url_for('arrangement_manage'))
 
@@ -309,6 +360,9 @@ def arrangement_manage():
     # [追加] 手配書登録フォームの会館名選択肢を、対象ユーザーの切り替えに
     # 連動させるためのデータ（テンプレート側でJavaScriptに渡す）。
     employee_places = _employee_places_map(employees)
+    # [追加] 手配書登録フォームに表示する「手当」項目一覧（表示順を固定する
+    # ため、辞書ではなくタプルのリストとして渡す）。
+    allowance_items = [(item, ALLOWANCE_LABELS[item]) for item in ALLOWANCE_ITEMS + ["highway"]]
 
     return render_template(
         'arrangement_manage.html',
@@ -317,6 +371,7 @@ def arrangement_manage():
         employee_places=employee_places,
         arrangements=arrangements,
         places=places,
+        allowance_items=allowance_items,
         error_message=error_message,
         place_error_message=place_error_message,
         today_str=get_today(),

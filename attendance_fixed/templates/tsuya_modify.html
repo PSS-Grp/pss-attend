@@ -11,6 +11,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{title}}：{{record_id}}</title>
     <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}" media="all" />
+    <style>
+      /* [追加] 手配者が設定した「手当」（金額が入力された項目のみ）を、
+           休憩欄の下に読み取り専用で表示するためのスタイル。 */
+      .allowance-display {
+        margin-top: 10px;
+      }
+      .allowance-display p {
+        margin: 2px 0;
+      }
+    </style>
 
   </head>
 
@@ -58,45 +68,22 @@
              休憩時間（分）の入力欄が使えるようになる。 -->
         &emsp;<input type="checkbox" id="break2" name="break2" onchange="toggleBreak2()" {{break2}}/>&emsp;
         <label for="break2">休憩</label>
-        <input type="number" min="0" step="1" disabled id="break_minutes2" name="break_minutes2" placeholder="分" value="{{break_minutes2}}"/><br /><br />
+        <input type="number" min="0" step="1" disabled id="break_minutes2" name="break_minutes2" placeholder="分" value="{{break_minutes2}}"/>
 
-        &emsp;<input type="checkbox" id="leader2" name="leader2" {{leader2}}/>&emsp;
-        <label for="leader">リーダー</label><br />
-
-        &emsp;<input type="checkbox" id="subleader2" name="subleader2" {{subleader2}}/>&emsp;
-        <label for="subleader">サブリーダー</label><br />
-
-        &emsp;<input type="checkbox" id="teach2" name="teach2" {{teach2}}/>&emsp;
-        <label for="teach">研修</label><br />
-
-        &emsp;<input type="checkbox" id="wait2" name="wait2" {{wait2}}/>&emsp;
-        <label for="wait">待機</label><br />
-
-        &emsp;<input type="checkbox" id="designated2" name="designated2" {{designated2}}/>&emsp;
-        <label for="designated">指定日</label><br />
-
-        &emsp;<input type="checkbox" id="distant2" name="distant2" {{distant2}}/>&emsp;
-        <label for="distant">遠方地</label><br />
-
-        &emsp;<input type="checkbox" id="special2" name="special2" {{special2}}/>&emsp;
-        <label for="special2">特別手当</label><br />
-
-        &emsp;<input type="checkbox" id="highway2" name="highway2" onchange="change()" {{highway2}}/>&emsp;
-        <label for="distant">高速道路</label>
-        <input type="number" required disabled id="express2" name="express2" placeholder="金額" value="{{express2}}"/><br />
+        <!-- [修正] リーダー・サブリーダー・研修・待機・指定日・遠方地・
+             特別手当・高速道路は、手配者が手配書登録画面
+             (/arrangement_manage)で金額まで指定して設定する方式に変更した
+             ため、この画面ではチェックボックスとしては扱わず、金額が
+             入力された項目だけを休憩の下に読み取り専用で表示する。 -->
+        {% if allowance_items %}
+        <div class="allowance-display">
+          {% for item in allowance_items %}
+          <p>{{ item.label }}：{{ "{:,}".format(item.amount) }}円</p>
+          {% endfor %}
+        </div>
+        {% endif %}
       </p>
     </div>
-
-      <script>
-        var express2_elem = document.getElementById("express2");
-        function change() {
-          if (document.getElementById("highway2").checked) {
-    		express2_elem.disabled = false;   //trueグレーアウト
-          } else {
-                express2_elem.disabled = true;
-          }
-        }
-      </script>
 
       <!-- [追加] 「休憩」チェックボックスの状態に応じて、休憩時間（分）の
            入力欄の有効／無効を切り替える。 -->
