@@ -177,19 +177,23 @@ def send_attendance_notification(shift_label, user_name, number, place, other,
 #
 #   arranger_name     : 手配者の氏名（current_user.username）
 #   target_user_name  : 手配書の対象ユーザーの氏名
+#   date              : 手配書登録フォームで選択された日付（"YYYY-MM-DD"形式の文字列）
 #   place             : 選択された会館名（"その他"の場合は"その他"という文字列）
 #   other             : 「その他」選択時に手入力された会館名（未入力ならNone可）
 #   shift_label       : "本葬" または "通夜"
 #   has_attachment    : 画像・PDFが登録されているかどうか（真偽値）
 #   has_memo          : メモが入力されているかどうか（真偽値）
 #------------------------------------------------
-def send_arrangement_notification(arranger_name, target_user_name, place, other,
+def send_arrangement_notification(arranger_name, target_user_name, date, place, other,
                                    shift_label, has_attachment, has_memo):
     effective_place = _effective_place(place, other)
     subject = "【登録】手配書が登録されました。"
     body = "\n".join([
         "手配者：{}".format(arranger_name),
         "対象ユーザ：{}".format(target_user_name),
+        # [追加] ユーザー要望により、手配書登録フォームで選択した日付も
+        # 本文の対象ユーザーの下に追加する。
+        "日付：{}".format(date),
         "会館名：{}".format(effective_place),
         "勤務：{}".format(shift_label),
         "添付：{}".format("あり" if has_attachment else "なし"),

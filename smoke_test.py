@@ -1253,6 +1253,13 @@ try:
     print("手配書登録通知メールの本文 ->", body_arr.replace("\n", " / "))
     assert "手配者：手配担当" in body_arr
     assert "対象ユーザ：テスト八郎" in body_arr
+    # [追加] ユーザー要望により、選択した日付も対象ユーザーの下に表示されること
+    assert "日付：{}".format(today_str) in body_arr
+    # 「対象ユーザ：」の直後（次の行）に「日付：」が来ること（順序の確認）
+    _target_user_line_idx = body_arr.index("対象ユーザ：")
+    _date_line_idx = body_arr.index("日付：")
+    assert _date_line_idx > _target_user_line_idx
+    assert body_arr[_target_user_line_idx:_date_line_idx].count("\n") == 1
     assert "会館名：五郎会館" in body_arr
     assert "勤務：本葬" in body_arr
     assert "添付：なし" in body_arr

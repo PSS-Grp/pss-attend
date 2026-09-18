@@ -391,6 +391,7 @@ def arrangement_manage():
                 notifications.send_arrangement_notification(
                     arranger_name=current_user.username,
                     target_user_name=target_user.username,
+                    date=date_str,
                     place=place,
                     other=other_place,
                     shift_label="本葬" if shift == "honso" else "通夜",
