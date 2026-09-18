@@ -196,7 +196,7 @@ class TimeModelView(SecureModelView):
 class ArrangementModelView(SecureModelView):
     column_list = [
         "id", "date", "shift", "target_user_id", "memo",
-        "image_filename", "created_by_id", "created_at", "updated_at",
+        "image_filename", "created_by_id", "created_by_name", "created_at", "updated_at",
     ]
     form_columns = ["target_user_id", "shift", "date", "memo", "image_filename"]
     column_filters = ["date", "shift", "target_user_id"]

@@ -267,6 +267,12 @@ class Arrangement(db.Model):
     special_amount = db.Column(db.Integer, nullable=True)
     highway_amount = db.Column(db.Integer, nullable=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    # [追加] 手配者(created_by_id)の、登録した時点での氏名(User.username)を
+    # そのまま複製して保持する列。created_by_idからUserへ結合すれば氏名も
+    # 分かるが、手配者アカウント自体が後で削除・改名された場合でも、
+    # 「この手配書を誰が登録したか」の記録が変わらず残るようにするため、
+    # 登録時点の氏名をこちらにも保存しておく。
+    created_by_name = db.Column(db.String(30), nullable=True)
     created_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, nullable=True)
 

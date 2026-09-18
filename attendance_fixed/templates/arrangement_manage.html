@@ -429,6 +429,11 @@
                 <th>手当</th>
                 <th>画像／PDF</th>
                 <th>メモ</th>
+                <!-- [追加] この手配書を登録した手配者の氏名。複数の手配者
+                     アカウントが運用される場合に、誰が登録したか一覧から
+                     確認できるようにする（models.Arrangement.created_by_name
+                     参照）。 -->
+                <th>手配者</th>
                 <th></th>
               </tr>
             </thead>
@@ -465,6 +470,7 @@
                   {% endif %}
                 </td>
                 <td class="memo-cell">{{ a.memo or "" }}</td>
+                <td>{{ a.created_by_name or (a.created_by.username if a.created_by else "") }}</td>
                 <td>
                   <form method="POST" action="{{ url_for('arrangement_delete', arrangement_id=a.id) }}" onsubmit="return confirm('この手配書を削除しますか？');">
                     <button type="submit" class="delete-button">削除</button>

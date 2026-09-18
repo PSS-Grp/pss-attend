@@ -38,6 +38,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 # [追加] 「手当」欄（休憩以外）に関する共通定義・ヘルパー（honso.py/tsuya.py
 # と共有するため、allowances.pyに切り出している）。
 from allowances import ALLOWANCE_ITEMS, ALLOWANCE_LABELS, parse_allowance_amounts
+# [追加] 手配書登録時のメール通知（出退勤画面と同じ仕組みを使う）。
+import notifications
 
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "pdf"}
@@ -288,25 +290,33 @@ def arrangement_manage():
                 target_user_id=target_user.id, shift=shift, date=date_str
             ).first()
 
+            # [修正] 「既存レコードの更新」「新規作成」のどちらの分岐でも、
+            # 保存に成功した後（メール通知・Time反映）に同じ変数から参照
+            # できるよう、対象のArrangementオブジェクトを共通の変数に
+            # まとめておく。
             if existing:
+                arrangement_record = existing
                 if image_filename:
-                    existing.image_filename = image_filename
-                    existing.image_data = image_data
-                existing.memo = memo or None
-                existing.place = place
-                existing.other_place = other_place
-                existing.leader_amount = allowance_amounts["leader"]
-                existing.subleader_amount = allowance_amounts["subleader"]
-                existing.teach_amount = allowance_amounts["teach"]
-                existing.wait_amount = allowance_amounts["wait"]
-                existing.designated_amount = allowance_amounts["designated"]
-                existing.distant_amount = allowance_amounts["distant"]
-                existing.special_amount = allowance_amounts["special"]
-                existing.highway_amount = allowance_amounts["highway"]
-                existing.created_by_id = current_user.id
-                existing.updated_at = now
+                    arrangement_record.image_filename = image_filename
+                    arrangement_record.image_data = image_data
+                arrangement_record.memo = memo or None
+                arrangement_record.place = place
+                arrangement_record.other_place = other_place
+                arrangement_record.leader_amount = allowance_amounts["leader"]
+                arrangement_record.subleader_amount = allowance_amounts["subleader"]
+                arrangement_record.teach_amount = allowance_amounts["teach"]
+                arrangement_record.wait_amount = allowance_amounts["wait"]
+                arrangement_record.designated_amount = allowance_amounts["designated"]
+                arrangement_record.distant_amount = allowance_amounts["distant"]
+                arrangement_record.special_amount = allowance_amounts["special"]
+                arrangement_record.highway_amount = allowance_amounts["highway"]
+                arrangement_record.created_by_id = current_user.id
+                # [追加] 手配者の氏名を、登録した時点の値として複製しておく
+                # （models.Arrangement.created_by_name参照）。
+                arrangement_record.created_by_name = current_user.username
+                arrangement_record.updated_at = now
             else:
-                db.session.add(Arrangement(
+                arrangement_record = Arrangement(
                     target_user_id=target_user.id,
                     shift=shift,
                     date=date_str,
@@ -324,9 +334,11 @@ def arrangement_manage():
                     special_amount=allowance_amounts["special"],
                     highway_amount=allowance_amounts["highway"],
                     created_by_id=current_user.id,
+                    created_by_name=current_user.username,
                     created_at=now,
                     updated_at=now,
-                ))
+                )
+                db.session.add(arrangement_record)
 
             # [修正] 以前はここでIntegrityError等が起きても画面には何も
             # 表示せず一覧画面へリダイレクトしていたため、実際には保存に
@@ -369,6 +381,21 @@ def arrangement_manage():
                 # （「手配者がユーザーの代理で設定する」イメージ）。
                 _apply_arrangement_to_time_record(
                     target_user.number, shift, date_str, place, other_place, allowance_amounts
+                )
+
+                # [追加] 手配書登録画面で「登録する」ボタンが押されたときにも、
+                # 出退勤画面と同じ宛先(NOTIFY_EMAIL_TO)へ通知メールを送る。
+                # 添付・メモの有無は、今回の入力だけでなく保存後の実際の値
+                # （既存の手配書を更新した場合、今回添付しなくても以前の
+                # 添付が残っていればそれも「あり」として扱う）を見る。
+                notifications.send_arrangement_notification(
+                    arranger_name=current_user.username,
+                    target_user_name=target_user.username,
+                    place=place,
+                    other=other_place,
+                    shift_label="本葬" if shift == "honso" else "通夜",
+                    has_attachment=bool(arrangement_record.image_filename),
+                    has_memo=bool(arrangement_record.memo),
                 )
 
                 return redirect(url_for('arrangement_manage'))

@@ -90,8 +90,17 @@ def _format_break(break_flag, break_minutes):
 # 戻り値は送信できたかどうかの真偽値（テスト・デバッグ用。呼び出し側は
 # 戻り値を見て処理を分ける必要はない＝失敗しても登録処理は継続してよい）。
 #------------------------------------------------
-def send_attendance_notification(shift_label, user_name, number, place, other,
-                                  start, end, break_flag, break_minutes):
+#------------------------------------------------
+# [追加] Resend APIへメールを送信する共通処理。
+# send_attendance_notification（出退勤画面用）・send_arrangement_notification
+# （手配書登録画面用）の両方から呼び出す。件名・本文の組み立ては呼び出し側の
+# 責務とし、ここでは「宛先・送信元の解決」「実際のAPI呼び出し」「失敗時の
+# ログ出力」だけを共通化する。
+#
+# 戻り値は送信できたかどうかの真偽値（テスト・デバッグ用。呼び出し側は
+# 戻り値を見て処理を分ける必要はない＝失敗しても登録処理は継続してよい）。
+#------------------------------------------------
+def _send_email(subject, body):
     api_key = os.environ.get("RESEND_API_KEY")
     mail_from = os.environ.get("MAIL_FROM") or "onboarding@resend.dev"
     notify_to_raw = os.environ.get("NOTIFY_EMAIL_TO")
@@ -105,6 +114,37 @@ def send_attendance_notification(shift_label, user_name, number, place, other,
     if not notify_to_list:
         return False
 
+    payload = {
+        "from": "勤怠管理システム <{}>".format(mail_from),
+        "to": notify_to_list,
+        "subject": subject,
+        "text": body,
+    }
+
+    try:
+        response = requests.post(
+            RESEND_API_URL,
+            headers={
+                "Authorization": "Bearer {}".format(api_key),
+                "Content-Type": "application/json",
+            },
+            data=json.dumps(payload),
+            timeout=10,
+        )
+        if response.status_code >= 400:
+            # [追加] メール送信に失敗しても、呼び出し元の登録処理自体は
+            # 失敗させない。エラー内容はログに残す。
+            print("[通知メール] 送信に失敗しました（HTTP {}）: {}".format(
+                response.status_code, response.text))
+            return False
+        return True
+    except Exception as e:
+        print("[通知メール] 送信に失敗しました:", e)
+        return False
+
+
+def send_attendance_notification(shift_label, user_name, number, place, other,
+                                  start, end, break_flag, break_minutes):
     effective_place = _effective_place(place, other)
     # [仕様] 退勤時間が入力されている場合は「退勤」、そうでない場合は「出勤」。
     is_checkout = bool(end) and end != "--:--"
@@ -127,30 +167,33 @@ def send_attendance_notification(shift_label, user_name, number, place, other,
         "休憩時間: {}".format(_format_break(break_flag, break_minutes)),
     ])
 
-    payload = {
-        "from": "勤怠管理システム <{}>".format(mail_from),
-        "to": notify_to_list,
-        "subject": subject,
-        "text": body,
-    }
+    return _send_email(subject, body)
 
-    try:
-        response = requests.post(
-            RESEND_API_URL,
-            headers={
-                "Authorization": "Bearer {}".format(api_key),
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(payload),
-            timeout=10,
-        )
-        if response.status_code >= 400:
-            # [追加] メール送信に失敗しても、出退勤の登録処理自体は
-            # 失敗させない。エラー内容はログに残す。
-            print("[通知メール] 送信に失敗しました（HTTP {}）: {}".format(
-                response.status_code, response.text))
-            return False
-        return True
-    except Exception as e:
-        print("[通知メール] 送信に失敗しました:", e)
-        return False
+
+#------------------------------------------------
+# [追加] 手配書登録画面(/arrangement_manage)で「登録する」ボタンが押された
+# ときに呼び出す通知メール送信関数。send_attendance_notification（出退勤
+# 画面用）と同じ送信先(NOTIFY_EMAIL_TO)へ送る。
+#
+#   arranger_name     : 手配者の氏名（current_user.username）
+#   target_user_name  : 手配書の対象ユーザーの氏名
+#   place             : 選択された会館名（"その他"の場合は"その他"という文字列）
+#   other             : 「その他」選択時に手入力された会館名（未入力ならNone可）
+#   shift_label       : "本葬" または "通夜"
+#   has_attachment    : 画像・PDFが登録されているかどうか（真偽値）
+#   has_memo          : メモが入力されているかどうか（真偽値）
+#------------------------------------------------
+def send_arrangement_notification(arranger_name, target_user_name, place, other,
+                                   shift_label, has_attachment, has_memo):
+    effective_place = _effective_place(place, other)
+    subject = "【登録】手配書が登録されました。"
+    body = "\n".join([
+        "手配者：{}".format(arranger_name),
+        "対象ユーザ：{}".format(target_user_name),
+        "会館名：{}".format(effective_place),
+        "勤務：{}".format(shift_label),
+        "添付：{}".format("あり" if has_attachment else "なし"),
+        "メモ：{}".format("あり" if has_memo else "なし"),
+    ])
+
+    return _send_email(subject, body)

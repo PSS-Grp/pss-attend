@@ -1002,8 +1002,12 @@ print("GET /arrangement_manage (手配者) ->", r_manage_get.status_code)
 assert r_manage_get.status_code == 200
 assert "手配書登録".encode("utf-8") in r_manage_get.data
 assert "デモ次郎".encode("utf-8") in r_manage_get.data  # 0002が選択肢にいる
-assert "手配担当".encode("utf-8") not in r_manage_get.data  # 手配者自身は選択肢に出ない
-assert "管理者".encode("utf-8") not in r_manage_get.data   # 管理者も選択肢に出ない
+# [修正] 「手配者」列（今回追加）には、登録済みの手配書の手配者名として
+# "手配担当" が正当に表示されうる（サンプルの手配書が手配担当によって
+# 登録されているため）ので、「対象ユーザーの選択肢」に出ないことを、
+# ページ全体ではなく<option>のマークアップそのもので確認する。
+assert "手配担当（7001）".encode("utf-8") not in r_manage_get.data  # 手配者自身は選択肢に出ない
+assert "管理者（9001）".encode("utf-8") not in r_manage_get.data   # 管理者も選択肢に出ない
 
 with app.app_context():
     target_0002 = User.query.filter_by(number="0002").first()
@@ -1203,6 +1207,99 @@ assert r_img_after_delete.status_code == 404
 r_admin_arrangement = client_admin.get("/admin/arrangement/", follow_redirects=False)
 print("GET /admin/arrangement/ (管理者) ->", r_admin_arrangement.status_code)
 assert r_admin_arrangement.status_code == 200
+
+# --- [追加] 手配書登録画面(/arrangement_manage)で「登録する」ボタンを押した際の
+#     メール通知・手配者名(created_by_name)の記録の確認 ---
+# 他のテストとの日付・対象ユーザーの組み合わせの衝突を避けるため、
+# この確認専用の従業員(8008)を用意する（8007用のテストと同じやり方）。
+with app.app_context():
+    if not User.query.filter_by(number="8008").first():
+        db.session.add(User(username="テスト八郎", number="8008",
+                             password=generate_password_hash("test7890"), is_admin=False))
+        db.session.commit()
+    target_8008 = User.query.filter_by(number="8008").first()
+    target_8008_id = target_8008.id
+
+_sent_requests.clear()
+_orig_env_arrangement_notify = {
+    k: os.environ.get(k)
+    for k in ("RESEND_API_KEY", "MAIL_FROM", "NOTIFY_EMAIL_TO")
+}
+os.environ["RESEND_API_KEY"] = "re_dummy_api_key"
+os.environ["NOTIFY_EMAIL_TO"] = "notify@example.com"
+notifications.requests.post = _fake_requests_post
+
+try:
+    # (1) 添付なし・メモありで登録 -> 「添付：なし」「メモ：あり」
+    r_arr_notify = client_arranger.post(
+        "/arrangement_manage",
+        data={
+            "target_user_id": str(target_8008_id),
+            "shift": "honso",
+            "date": today_str,
+            "memo": "メール通知確認用のメモ",
+            "place": "五郎会館",
+        },
+        follow_redirects=False,
+    )
+    print("POST /arrangement_manage (手配書登録メール通知の確認) ->", r_arr_notify.status_code)
+    assert r_arr_notify.status_code == 302
+    assert len(_sent_requests) == 1
+    payload_arr = json.loads(_sent_requests[0]["data"])
+    print("手配書登録通知メールの件名 ->", payload_arr["subject"])
+    assert payload_arr["subject"] == "【登録】手配書が登録されました。"
+    assert payload_arr["to"] == ["notify@example.com"]
+    body_arr = payload_arr["text"]
+    print("手配書登録通知メールの本文 ->", body_arr.replace("\n", " / "))
+    assert "手配者：手配担当" in body_arr
+    assert "対象ユーザ：テスト八郎" in body_arr
+    assert "会館名：五郎会館" in body_arr
+    assert "勤務：本葬" in body_arr
+    assert "添付：なし" in body_arr
+    assert "メモ：あり" in body_arr
+
+    # DB側にも手配者の氏名(created_by_name)が記録されていることを確認
+    with app.app_context():
+        arr_notify = Arrangement.query.filter_by(
+            target_user_id=target_8008_id, shift="honso", date=today_str
+        ).first()
+        assert arr_notify is not None
+        assert arr_notify.created_by_name == "手配担当"
+
+    # 一覧画面にも「手配者」列として表示されることを確認
+    r_manage_after_notify = client_arranger.get("/arrangement_manage", follow_redirects=False)
+    assert "手配者".encode("utf-8") in r_manage_after_notify.data
+
+    # (2) 添付あり・メモなしで登録（別の勤務区分・同じ対象ユーザー）
+    #     -> 「添付：あり」「メモ：なし」
+    _sent_requests.clear()
+    r_arr_notify_img = client_arranger.post(
+        "/arrangement_manage",
+        data={
+            "target_user_id": str(target_8008_id),
+            "shift": "tsuya",
+            "date": today_str,
+            "memo": "",
+            "image": (io.BytesIO(b"fake-image-for-notify-test"), "notify.png"),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=False,
+    )
+    print("POST /arrangement_manage (手配書登録メール通知の確認、添付あり) ->", r_arr_notify_img.status_code)
+    assert r_arr_notify_img.status_code == 302
+    assert len(_sent_requests) == 1
+    payload_arr_img = json.loads(_sent_requests[0]["data"])
+    body_arr_img = payload_arr_img["text"]
+    assert "勤務：通夜" in body_arr_img
+    assert "添付：あり" in body_arr_img
+    assert "メモ：なし" in body_arr_img
+finally:
+    notifications.requests.post = _orig_requests_post
+    for k, v in _orig_env_arrangement_notify.items():
+        if v is None:
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
 
 # --- [追加] 手配者画面からの「会館名」登録機能の確認 ---
 
